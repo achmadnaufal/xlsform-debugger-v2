@@ -1,4 +1,8 @@
 declare module "enketo-core" {
+  interface ModelNode {
+    getVal(): string;
+    setVal(value: string, constraint?: null, type?: string): boolean;
+  }
   export class Form {
     constructor(
       formEl: HTMLFormElement,
@@ -13,8 +17,15 @@ declare module "enketo-core" {
     getDataStr(): string;
     resetView(): void;
     model: {
+      xml: Document;
+      node(xpath: string, index?: number): ModelNode;
       events: {
         on(event: string, callback: () => void): void;
+      };
+    };
+    view: {
+      $: {
+        trigger(event: string): void;
       };
     };
   }

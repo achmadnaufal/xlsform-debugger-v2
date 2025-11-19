@@ -39,4 +39,4 @@ export interface UploadedFiles {
   readonly csvFiles: readonly File[];
 }
 
-export type DebugTab = "variables" | "expressions" | "warnings" | "xform";
+export type DebugTab = "variables" | "question" | "warnings" | "external" | "source";
