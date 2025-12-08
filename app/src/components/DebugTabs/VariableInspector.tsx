@@ -122,12 +122,12 @@ export function VariableInspector({ variables }: VariableInspectorProps) {
         </label>
       </div>
       <div className="overflow-auto flex-1">
-        <table className="w-full text-sm">
+        <table className="w-full text-xs">
           <thead className="sticky top-0 bg-gray-800">
             <tr className="text-left text-gray-400 border-b border-gray-700">
-              <th className="px-3 py-2 font-medium">Field</th>
-              <th className="px-3 py-2 font-medium">XPath</th>
-              <th className="px-3 py-2 font-medium">Value <span className="font-normal text-gray-600">(click to edit)</span></th>
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Field</th>
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">XPath</th>
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Value <span className="font-normal text-gray-600 normal-case">(click to edit)</span></th>
             </tr>
           </thead>
           <tbody>
