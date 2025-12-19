@@ -29,6 +29,19 @@ function MetaRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+
+function findField(fields: Map<string, FieldMeta>, name: string): FieldMeta | undefined {
+  if (fields.has(name)) return fields.get(name);
+  // Try by last path segment
+  const last = name.split('/').pop() || '';
+  if (fields.has(last)) return fields.get(last);
+  // Try partial suffix match (for repeat contexts)
+  for (const [key, val] of fields) {
+    if (key.endsWith('/' + last) || val.xpath?.endsWith('/' + name)) return val;
+  }
+  return undefined;
+}
+
 export function QuestionInspector({
   selectedQuestion,
   onQuestionSelect,
@@ -71,7 +84,7 @@ export function QuestionInspector({
     );
   }
 
-  const field = fields.get(selectedQuestion);
+  const field = findField(fields, selectedQuestion);
   if (!field) {
     return (
       <div className="p-4 text-gray-400 text-sm">
