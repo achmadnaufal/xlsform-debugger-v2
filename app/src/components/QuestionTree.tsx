@@ -137,17 +137,16 @@ function TreeNodeItem({
 
   const statusDot =
     status === "answered"
-      ? "bg-green-400"
+      ? "bg-green-500"
       : status === "hidden"
-      ? "bg-gray-600"
-      : "bg-gray-700";
+      ? "bg-orange-400"
+      : "bg-gray-300";
 
   const handleClick = () => {
     if (isGroup) {
       setExpanded((e) => !e);
     } else {
       onSelect(node.name, node.xpath);
-      // Scroll to question in form
       const el =
         document.querySelector(`.question[data-name*="${node.name}"]`) ??
         document.querySelector(`.question [name*="${node.name}"]`)?.closest(".question");
@@ -163,19 +162,20 @@ function TreeNodeItem({
     <div>
       <div
         onClick={handleClick}
+        title={node.name}
         className={`flex items-center gap-1 px-2 py-0.5 cursor-pointer rounded text-xs select-none transition-colors ${
           isSelected
-            ? "bg-blue-800/50 text-blue-200"
+            ? "bg-blue-100 text-blue-700"
             : isGroup
-            ? "text-gray-300 hover:bg-gray-700/50"
-            : "text-gray-400 hover:bg-gray-700/30"
+            ? "text-gray-700 hover:bg-blue-50"
+            : "text-gray-600 hover:bg-blue-50"
         }`}
         style={{ paddingLeft: `${8 + depth * 12}px` }}
       >
         {isGroup && (
-          <span className="text-gray-500 text-[10px] w-3">{expanded ? "▾" : "▸"}</span>
+          <span className="text-gray-400 text-[10px] w-3">{expanded ? "▾" : "▸"}</span>
         )}
-        <span className="text-gray-500 font-mono text-[10px] w-6 shrink-0 text-center">
+        <span className="text-gray-400 font-mono text-[10px] w-6 shrink-0 text-center">
           {TYPE_ICONS[node.nodeType] ?? "?"}
         </span>
         {!isGroup && (
@@ -203,8 +203,6 @@ function TreeNodeItem({
 }
 
 export function QuestionTree({ xformXml, selectedQuestion, onSelect }: QuestionTreeProps) {
-  const [collapsed, setCollapsed] = useState(false);
-
   const tree = useMemo(() => {
     if (!xformXml) return [];
     try {
@@ -214,41 +212,18 @@ export function QuestionTree({ xformXml, selectedQuestion, onSelect }: QuestionT
     }
   }, [xformXml]);
 
-  if (collapsed) {
-    return (
-      <div className="w-6 bg-gray-900 border-r border-gray-700 flex flex-col items-center pt-2">
-        <button
-          type="button"
-          onClick={() => setCollapsed(false)}
-          className="text-gray-500 hover:text-gray-200 text-xs"
-          title="Expand question tree"
-        >
-          ▸
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="w-52 shrink-0 bg-gray-900 border-r border-gray-700 flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col bg-white border-r border-gray-200 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-2 py-1.5 border-b border-gray-700 shrink-0">
-        <span className="text-xs font-medium text-gray-400">Form Structure</span>
-        <button
-          type="button"
-          onClick={() => setCollapsed(true)}
-          className="text-gray-600 hover:text-gray-300 text-xs"
-          title="Collapse"
-        >
-          ◂
-        </button>
+      <div className="flex items-center justify-between px-2 py-1.5 bg-gray-50 border-b border-gray-200 shrink-0">
+        <span className="text-xs font-medium text-gray-700">Form Structure</span>
       </div>
       {/* Tree */}
-      <div className="overflow-y-auto flex-1 py-1">
+      <div className="overflow-auto flex-1 py-1">
         {!xformXml ? (
-          <div className="px-3 py-2 text-xs text-gray-600">No form loaded</div>
+          <div className="px-3 py-2 text-xs text-gray-400">No form loaded</div>
         ) : tree.length === 0 ? (
-          <div className="px-3 py-2 text-xs text-gray-600">No questions found</div>
+          <div className="px-3 py-2 text-xs text-gray-400">No questions found</div>
         ) : (
           tree.map((node) => (
             <TreeNodeItem

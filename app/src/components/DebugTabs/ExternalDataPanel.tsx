@@ -29,12 +29,10 @@ export function ExternalDataPanel({ xformXml }: ExternalDataPanelProps) {
     const externalData = window.__externalData ?? [];
     if (externalData.length === 0) return [];
 
-    // Find which fields reference each file
     const pulldataRefs: Record<string, string[]> = {};
     if (xformXml) {
       try {
         const regex = /pulldata\s*\(\s*'([^']+)'\s*,[^)]+\)/g;
-        // Also find field context from surrounding XML
         const doc = new DOMParser().parseFromString(xformXml, 'application/xml');
         doc.querySelectorAll('bind').forEach((bind) => {
           const calc = bind.getAttribute('calculate') ?? '';
@@ -46,7 +44,6 @@ export function ExternalDataPanel({ xformXml }: ExternalDataPanelProps) {
             if (name && !pulldataRefs[file].includes(name)) pulldataRefs[file].push(name);
           }
         });
-        // Suppress unused variable warning
         void regex;
       } catch {
         // ignore
@@ -66,7 +63,7 @@ export function ExternalDataPanel({ xformXml }: ExternalDataPanelProps) {
 
   if (csvInfos.length === 0) {
     return (
-      <div className="p-4 text-gray-500 text-sm">
+      <div className="p-4 text-gray-400 text-sm">
         No external CSV data loaded. Upload CSV files alongside your XLSForm.
       </div>
     );
@@ -75,19 +72,19 @@ export function ExternalDataPanel({ xformXml }: ExternalDataPanelProps) {
   return (
     <div className="overflow-auto h-full p-3 space-y-4">
       {csvInfos.map((csv) => (
-        <div key={csv.id} className="bg-gray-800/50 rounded border border-gray-700 p-3">
+        <div key={csv.id} className="bg-gray-50 border border-gray-200 rounded p-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="font-mono text-sm font-medium text-blue-300">{csv.id}</span>
-            <span className="text-xs text-gray-400 bg-gray-700 px-2 py-0.5 rounded">
+            <span className="font-mono text-sm font-medium text-blue-600">{csv.id}</span>
+            <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
               {csv.rowCount} rows
             </span>
           </div>
           {csv.columns.length > 0 && (
             <div className="mb-2">
-              <div className="text-xs text-gray-500 mb-1">Columns</div>
+              <div className="text-xs text-gray-400 mb-1">Columns</div>
               <div className="flex flex-wrap gap-1">
                 {csv.columns.map((col) => (
-                  <span key={col} className="px-1.5 py-0.5 bg-gray-700 text-gray-300 text-xs font-mono rounded">
+                  <span key={col} className="px-1.5 py-0.5 bg-gray-100 text-gray-700 text-xs font-mono rounded border border-gray-200">
                     {col}
                   </span>
                 ))}
@@ -96,10 +93,10 @@ export function ExternalDataPanel({ xformXml }: ExternalDataPanelProps) {
           )}
           {csv.usedByFields.length > 0 && (
             <div>
-              <div className="text-xs text-gray-500 mb-1">Used by</div>
+              <div className="text-xs text-gray-400 mb-1">Used by</div>
               <div className="flex flex-wrap gap-1">
                 {csv.usedByFields.map((f) => (
-                  <span key={f} className="px-1.5 py-0.5 bg-purple-900/40 text-purple-300 text-xs font-mono rounded">
+                  <span key={f} className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs font-mono rounded">
                     {f}
                   </span>
                 ))}

@@ -79,7 +79,7 @@ function ValueCell({
           if (e.key === "Enter") commit();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="w-full bg-gray-700 border border-blue-500 rounded px-1 py-0.5 text-xs font-mono text-blue-200 focus:outline-none"
+        className="w-full bg-gray-100 border border-blue-500 rounded px-1 py-0.5 text-xs font-mono text-blue-700 focus:outline-none"
       />
     );
   }
@@ -87,7 +87,7 @@ function ValueCell({
   return (
     <span
       className={`font-mono text-xs cursor-pointer hover:underline ${
-        isNaN_ ? "text-red-400" : isEmpty ? "text-gray-600" : "text-green-300"
+        isNaN_ ? "text-red-600" : isEmpty ? "text-gray-400" : "text-green-700"
       }`}
       title="Click to override value"
       onClick={() => {
@@ -97,7 +97,7 @@ function ValueCell({
     >
       {isEmpty ? "—" : row.liveValue}
       {isOverridden(row.xpath) && (
-        <span className="ml-1 text-[10px] bg-orange-800/50 text-orange-300 px-1 rounded">override</span>
+        <span className="ml-1 text-[10px] bg-orange-100 text-orange-600 px-1 rounded">override</span>
       )}
     </span>
   );
@@ -126,14 +126,12 @@ export function CalculationsPanel({ xformXml }: CalculationsPanelProps) {
     setLiveValues(updated);
   }, [calcFields]);
 
-  // Auto-refresh every 2 seconds
   useEffect(() => {
     refresh();
     const id = setInterval(refresh, 2000);
     return () => clearInterval(id);
   }, [refresh]);
 
-  // Also listen for enketo dataupdate events
   useEffect(() => {
     const handler = () => refresh();
     document.addEventListener("dataupdate", handler);
@@ -162,12 +160,12 @@ export function CalculationsPanel({ xformXml }: CalculationsPanelProps) {
   };
 
   if (!xformXml) {
-    return <div className="p-4 text-gray-500 text-sm">No form loaded.</div>;
+    return <div className="p-4 text-gray-400 text-sm">No form loaded.</div>;
   }
 
   if (calcFields.length === 0) {
     return (
-      <div className="p-4 text-gray-500 text-sm">
+      <div className="p-4 text-gray-400 text-sm">
         No calculate fields found in this form.
       </div>
     );
@@ -175,24 +173,24 @@ export function CalculationsPanel({ xformXml }: CalculationsPanelProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-3 py-2 border-b border-gray-700 shrink-0 flex gap-2 items-center">
+      <div className="px-3 py-2 border-b border-gray-200 shrink-0 flex gap-2 items-center">
         <input
           type="text"
           placeholder="Search calculations..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+          className="flex-1 bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500"
         />
-        <span className="text-xs text-gray-500 shrink-0">{calcFields.length} calcs</span>
+        <span className="text-xs text-gray-400 shrink-0">{calcFields.length} calcs</span>
       </div>
       <div className="overflow-auto flex-1">
         <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-gray-800">
-            <tr className="text-left text-gray-400 border-b border-gray-700">
-              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Name</th>
-              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Label</th>
-              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400 max-w-48">Formula</th>
-              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Live Value</th>
+          <thead className="sticky top-0 bg-gray-100">
+            <tr className="text-left text-gray-600 border-b border-gray-200">
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">Name</th>
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">Label</th>
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600 max-w-48">Formula</th>
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">Live Value</th>
             </tr>
           </thead>
           <tbody>
@@ -200,10 +198,10 @@ export function CalculationsPanel({ xformXml }: CalculationsPanelProps) {
               const isNaN_ = row.liveValue === "NaN";
               const isEmpty = row.liveValue === "" || row.liveValue === "-";
               return (
-                <tr key={row.xpath} className={`border-b border-gray-800 hover:bg-gray-800/50 ${!isEmpty && !isNaN_ ? "bg-gray-800/10" : ""}`}>
-                  <td className="px-3 py-1.5 text-blue-300 font-mono whitespace-nowrap">{row.name}</td>
-                  <td className="px-3 py-1.5 text-gray-400 max-w-32 truncate">{row.label || "—"}</td>
-                  <td className="px-3 py-1.5 text-yellow-200/70 font-mono max-w-48 truncate" title={row.formula}>{row.formula}</td>
+                <tr key={row.xpath} className={`border-b border-gray-100 hover:bg-gray-50 ${!isEmpty && !isNaN_ ? "bg-blue-50/20" : ""}`}>
+                  <td className="px-3 py-1.5 text-blue-700 font-mono whitespace-nowrap">{row.name}</td>
+                  <td className="px-3 py-1.5 text-gray-600 max-w-32 truncate">{row.label || "—"}</td>
+                  <td className="px-3 py-1.5 text-yellow-600 font-mono max-w-48 truncate" title={row.formula}>{row.formula}</td>
                   <td className="px-3 py-1.5 min-w-24">
                     <ValueCell row={row} overrides={overrides} onOverride={handleOverride} />
                   </td>
@@ -213,7 +211,7 @@ export function CalculationsPanel({ xformXml }: CalculationsPanelProps) {
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div className="p-4 text-gray-500 text-sm text-center">No matches.</div>
+          <div className="p-4 text-gray-400 text-sm text-center">No matches.</div>
         )}
       </div>
     </div>

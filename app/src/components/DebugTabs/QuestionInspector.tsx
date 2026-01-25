@@ -38,22 +38,18 @@ function parseChoices(xformXml: string, listName: string): Choice[] {
   if (!listName) return [];
   try {
     const doc = new DOMParser().parseFromString(xformXml, 'application/xml');
-    // XForm choices are in instance elements with id matching listName
     const instance = doc.querySelector(`instance[id="${listName}"]`);
     if (instance) {
-      // itemset-based choices
       const items = Array.from(instance.querySelectorAll('item, *'));
       return items.slice(0, 200).map((el) => ({
         name: el.querySelector('name')?.textContent?.trim() ?? el.getAttribute('name') ?? '',
         label: el.querySelector('label')?.textContent?.trim() ?? '',
       })).filter(c => c.name);
     }
-    // Inline select/select1 choices
     const selects = doc.querySelectorAll('select1, select');
     for (const sel of Array.from(selects)) {
       const items = sel.querySelectorAll(':scope > item');
       if (items.length > 0) {
-        // Check if this select matches our listName
         const ref = sel.getAttribute('ref') ?? '';
         const fieldName = ref.split('/').pop() ?? '';
         if (fieldName === listName || listName === '') {
@@ -73,13 +69,11 @@ function parseChoices(xformXml: string, listName: string): Choice[] {
 function parseChoicesForField(xformXml: string, field: FieldMeta): Choice[] {
   try {
     const doc = new DOMParser().parseFromString(xformXml, 'application/xml');
-    // Find the select element for this field
     const selects = doc.querySelectorAll('select1, select');
     for (const sel of Array.from(selects)) {
       const ref = sel.getAttribute('ref') ?? '';
       const fieldName = ref.split('/').pop() ?? '';
       if (fieldName === field.name) {
-        // Inline items
         const items = sel.querySelectorAll(':scope > item');
         if (items.length > 0) {
           return Array.from(items).map((item) => ({
@@ -87,7 +81,6 @@ function parseChoicesForField(xformXml: string, field: FieldMeta): Choice[] {
             label: item.querySelector('label value, label')?.textContent?.trim() ?? '',
           })).filter(c => c.name);
         }
-        // Itemset-based
         const itemset = sel.querySelector('itemset');
         if (itemset) {
           const nodeset = itemset.getAttribute('nodeset') ?? '';
@@ -110,7 +103,6 @@ export function QuestionInspector({
   xformXml,
   variables,
 }: QuestionInspectorProps) {
-  // Attach global click listener to detect question selection
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       const question = (e.target as Element).closest?.('.question');
@@ -140,7 +132,7 @@ export function QuestionInspector({
 
   if (!selectedQuestion) {
     return (
-      <div className="p-4 text-gray-500 text-xs">
+      <div className="p-4 text-gray-400 text-xs">
         Click a question in the form to inspect it.
       </div>
     );
@@ -149,9 +141,9 @@ export function QuestionInspector({
   const field = findField(fields, selectedQuestion);
   if (!field) {
     return (
-      <div className="p-4 text-gray-400 text-xs">
-        <p className="font-mono text-blue-300 mb-1">{selectedQuestion}</p>
-        <p className="text-gray-500">No XForm metadata found for this field.</p>
+      <div className="p-4 text-gray-600 text-xs">
+        <p className="font-mono text-blue-600 mb-1">{selectedQuestion}</p>
+        <p className="text-gray-400">No XForm metadata found for this field.</p>
       </div>
     );
   }
@@ -185,7 +177,6 @@ export function QuestionInspector({
     field.type === 'select1' || field.type === 'select';
   const choices = isSelectType && xformXml ? parseChoicesForField(xformXml, field) : [];
 
-  // All non-empty metadata fields
   const allMeta: Array<{ label: string; value: string; mono?: boolean }> = [
     { label: 'name', value: field.name, mono: true },
     { label: 'type', value: field.type, mono: true },
@@ -200,42 +191,42 @@ export function QuestionInspector({
     <div className="overflow-auto h-full p-3 space-y-3">
       {/* Header */}
       <div className="flex items-center gap-2">
-        <span className="text-blue-300 font-mono font-medium">{field.name}</span>
-        <span className="text-[10px] text-gray-500 bg-gray-800 px-2 py-0.5 rounded font-mono">{field.type || 'unknown'}</span>
+        <span className="text-blue-600 font-mono font-medium">{field.name}</span>
+        <span className="text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded font-mono">{field.type || 'unknown'}</span>
       </div>
 
-      {/* Current value — prominent */}
-      <div className="bg-gray-800 rounded p-3">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Current Value</div>
-        <div className={`font-mono text-sm ${currentValue ? 'text-green-300' : 'text-gray-600'}`}>
+      {/* Current value */}
+      <div className="bg-gray-50 border border-gray-200 rounded p-3">
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1">Current Value</div>
+        <div className={`font-mono text-sm ${currentValue ? 'text-green-700' : 'text-gray-400'}`}>
           {currentValue || '— (empty)'}
         </div>
       </div>
 
       {/* All metadata table */}
-      <div className="bg-gray-800 rounded p-3">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Field Metadata</div>
+      <div className="bg-gray-50 border border-gray-200 rounded p-3">
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-2">Field Metadata</div>
         <div className="space-y-0.5">
           {allMeta.map(m => (
-            <div key={m.label} className="flex gap-2 py-1 border-b border-gray-700/50">
-              <span className="text-[11px] font-semibold text-gray-300 w-24 shrink-0">{m.label}</span>
-              <span className={`text-xs break-all ${m.mono ? 'font-mono text-gray-200' : 'text-gray-200'}`}>{m.value}</span>
+            <div key={m.label} className="flex gap-2 py-1 border-b border-gray-200/50">
+              <span className="text-[11px] font-semibold text-gray-600 w-24 shrink-0">{m.label}</span>
+              <span className={`text-xs break-all ${m.mono ? 'font-mono text-gray-900' : 'text-gray-900'}`}>{m.value}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Expressions with evaluated results */}
+      {/* Expressions */}
       {(field.relevant || field.constraint || field.calculation || field.choiceFilter) && (
-        <div className="bg-gray-800 rounded p-3 space-y-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Expressions</div>
+        <div className="bg-gray-50 border border-gray-200 rounded p-3 space-y-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">Expressions</div>
 
           {field.relevant && (
             <div>
-              <div className="text-[11px] font-semibold text-gray-300 mb-1">relevant</div>
-              <div className="font-mono text-xs text-yellow-200 break-all mb-1">{field.relevant}</div>
+              <div className="text-[11px] font-semibold text-gray-600 mb-1">relevant</div>
+              <div className="font-mono text-xs text-yellow-600 break-all mb-1">{field.relevant}</div>
               {relevantResult !== null && (
-                <div className={`text-xs font-medium ${relevantResult ? 'text-green-400' : 'text-red-400'}`}>
+                <div className={`text-xs font-medium ${relevantResult ? 'text-green-700' : 'text-red-600'}`}>
                   {relevantResult ? '✅ Visible' : '🚫 Hidden'}
                 </div>
               )}
@@ -244,28 +235,28 @@ export function QuestionInspector({
 
           {field.constraint && (
             <div>
-              <div className="text-[11px] font-semibold text-gray-300 mb-1">constraint</div>
-              <div className="font-mono text-xs text-yellow-200 break-all mb-1">{field.constraint}</div>
+              <div className="text-[11px] font-semibold text-gray-600 mb-1">constraint</div>
+              <div className="font-mono text-xs text-yellow-600 break-all mb-1">{field.constraint}</div>
               {constraintResult !== null && (
-                <div className={`text-xs font-medium ${constraintResult ? 'text-green-400' : 'text-red-400'}`}>
+                <div className={`text-xs font-medium ${constraintResult ? 'text-green-700' : 'text-red-600'}`}>
                   {constraintResult ? '✅ Passes' : '❌ Fails'}
                 </div>
               )}
-              {!currentValue && <div className="text-xs text-gray-500">No value — can't evaluate</div>}
+              {!currentValue && <div className="text-xs text-gray-400">No value — can't evaluate</div>}
             </div>
           )}
 
           {field.calculation && (
             <div>
-              <div className="text-[11px] font-semibold text-gray-300 mb-1">calculation</div>
-              <div className="font-mono text-xs text-yellow-200 break-all">{field.calculation}</div>
+              <div className="text-[11px] font-semibold text-gray-600 mb-1">calculation</div>
+              <div className="font-mono text-xs text-yellow-600 break-all">{field.calculation}</div>
             </div>
           )}
 
           {field.choiceFilter && (
             <div>
-              <div className="text-[11px] font-semibold text-gray-300 mb-1">choice_filter</div>
-              <div className="font-mono text-xs text-yellow-200 break-all">{field.choiceFilter}</div>
+              <div className="text-[11px] font-semibold text-gray-600 mb-1">choice_filter</div>
+              <div className="font-mono text-xs text-yellow-600 break-all">{field.choiceFilter}</div>
             </div>
           )}
         </div>
@@ -273,26 +264,26 @@ export function QuestionInspector({
 
       {/* Choices for select types */}
       {isSelectType && (
-        <div className="bg-gray-800 rounded p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">
-            Choices {field.choiceFilter && <span className="ml-1 px-1 bg-yellow-800/50 text-yellow-300 rounded normal-case">filtered</span>}
-            {choices.length > 0 && <span className="ml-1 text-gray-600 normal-case">({choices.length})</span>}
+        <div className="bg-gray-50 border border-gray-200 rounded p-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-2">
+            Choices {field.choiceFilter && <span className="ml-1 px-1 bg-yellow-100 text-yellow-600 rounded normal-case">filtered</span>}
+            {choices.length > 0 && <span className="ml-1 text-gray-400 normal-case">({choices.length})</span>}
           </div>
           {choices.length === 0 ? (
-            <div className="text-gray-600 text-xs">No inline choices found (may be external/itemset)</div>
+            <div className="text-gray-400 text-xs">No inline choices found (may be external/itemset)</div>
           ) : (
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-700">
-                  <th className="text-left py-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Value</th>
-                  <th className="text-left py-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Label</th>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-gray-600">Value</th>
+                  <th className="text-left py-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-gray-600">Label</th>
                 </tr>
               </thead>
               <tbody>
                 {choices.map(c => (
-                  <tr key={c.name} className="border-b border-gray-700/50 hover:bg-gray-700/30">
-                    <td className="py-1 px-1 font-mono text-xs text-blue-300">{c.name}</td>
-                    <td className="py-1 px-1 text-xs text-gray-300">{c.label || c.name}</td>
+                  <tr key={c.name} className="border-b border-gray-100 hover:bg-gray-100">
+                    <td className="py-1 px-1 font-mono text-xs text-blue-600">{c.name}</td>
+                    <td className="py-1 px-1 text-xs text-gray-700">{c.label || c.name}</td>
                   </tr>
                 ))}
               </tbody>
@@ -303,8 +294,8 @@ export function QuestionInspector({
 
       {/* Dependencies */}
       {deps.size > 0 && (
-        <div className="bg-gray-800 rounded p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">
+        <div className="bg-gray-50 border border-gray-200 rounded p-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-2">
             Depends On ({deps.size})
           </div>
           <div className="flex flex-wrap gap-1">
@@ -312,7 +303,7 @@ export function QuestionInspector({
               <button
                 key={dep}
                 onClick={() => onQuestionSelect(dep)}
-                className="px-2 py-0.5 bg-gray-700 hover:bg-gray-600 text-blue-300 text-xs font-mono rounded transition-colors"
+                className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-blue-600 text-xs font-mono rounded transition-colors"
               >
                 {dep}
               </button>
@@ -323,8 +314,8 @@ export function QuestionInspector({
 
       {/* Dependents */}
       {dependents.length > 0 && (
-        <div className="bg-gray-800 rounded p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">
+        <div className="bg-gray-50 border border-gray-200 rounded p-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-2">
             Used By ({dependents.length})
           </div>
           <div className="flex flex-wrap gap-1">
@@ -332,11 +323,11 @@ export function QuestionInspector({
               <button
                 key={`${d.name}:${d.field}`}
                 onClick={() => onQuestionSelect(d.name)}
-                className="px-2 py-0.5 bg-gray-700 hover:bg-gray-600 text-purple-300 text-xs font-mono rounded transition-colors"
+                className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-purple-600 text-xs font-mono rounded transition-colors"
                 title={`via ${d.field}`}
               >
                 {d.name}
-                <span className="text-gray-500 ml-1">({d.field})</span>
+                <span className="text-gray-400 ml-1">({d.field})</span>
               </button>
             ))}
           </div>
