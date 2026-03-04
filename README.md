@@ -1,145 +1,167 @@
 # XLSForm Debugger v2
 
 > Debug your KoboToolbox / ODK XLSForms locally before deployment.
-> Uses the same enketo-core renderer as KoboToolbox — what you see here is exactly what your field team sees.
+> Uses the same **enketo-core** renderer as KoboToolbox — what you see here is exactly what your field team sees.
+
+![Overview](docs/screenshot-overview.png)
 
 ---
 
 ## What it does
 
-- Renders your XLSForm exactly as KoboToolbox would, using enketo-core
-- Shows all form variables and their live values as you fill in the form
-- Inspects skip logic (relevant), constraints, and calculations in real time
-- Highlights undefined variable references and broken expressions
-- Lets you inspect any question's full metadata, dependencies, and dependents
-- Supports `pulldata()` debugging with uploadable CSV files
-- Shows the raw XLSForm source (survey + choices sheets)
+- **Renders your form exactly as KoboToolbox would** — same engine (enketo-core), same logic
+- **Loads your pulldata CSVs** — see real values resolve in the form
+- **Live variable inspector** — all 600+ variables with current values, editable for testing
+- **Calculations panel** — every `calculate` field with its formula and live output
+- **Question inspector** — click any question to see its metadata, relevant/constraint evaluation, dependencies
+- **Form structure tree** — collapsible hierarchy of all groups, repeats, and questions with status indicators
+- **Warnings** — catches undefined variable references, missing CSVs, malformed expressions
+- **XLSForm source viewer** — browse the raw survey/choices sheets without opening Excel
 
 ---
 
-## Quick Start (Local)
+## Screenshots
 
-**Requirements:** Python 3.9+, Node 18+
+### Form rendered alongside debug panels
+![Overview](docs/screenshot-overview.png)
 
+### Calculations — live values for all calculated fields
+![Calculations](docs/screenshot-calculations.png)
+
+### Inspector — click any question to inspect metadata, relevance, dependencies
+![Inspector](docs/screenshot-inspector.png)
+
+### Variables — all form variables, editable for testing
+![Variables](docs/screenshot-variables.png)
+
+---
+
+## Setup
+
+### Prerequisites
+- Python 3.10+
+- Node.js 18+
+- Git
+
+### 1. Clone
 ```bash
-# 1. Start the API (converts XLSForm → XForm XML)
-cd api/
-pip install -r requirements.txt
-uvicorn main:app --reload --port 5050
-
-# 2. Start the frontend
-cd app/
-npm install
-npm run dev
-# Opens at http://localhost:5174
+git clone https://github.com/achmadnaufal/xlsform-debugger-v2.git
+cd xlsform-debugger-v2
 ```
+
+### 2. Install API dependencies
+```bash
+cd api
+pip install -r requirements.txt
+```
+
+### 3. Install frontend dependencies
+```bash
+cd app
+npm install
+```
+
+### 4. Start the API
+```bash
+cd api
+uvicorn main:app --port 5050
+```
+Keep this terminal open.
+
+### 5. Start the frontend *(new terminal)*
+```bash
+cd app
+npm run dev
+```
+
+### 6. Open
+→ **http://localhost:5173**
 
 ---
 
 ## How to use
 
 ### Loading your form
-
-1. Click **Upload XLSForm** in the top bar and select your `.xlsx` file
-2. If your form uses `pulldata()`, upload the CSV files when prompted
-3. The form renders immediately in the center panel
+1. Drag and drop your `.xlsx` file onto the upload bar at the top
+2. Click **+ CSV files** to load your pulldata CSVs (e.g. `pulldata_producer_stm.csv`)
+3. The form renders automatically
 
 ### The 3 panels
 
 | Panel | What it shows |
 |---|---|
-| **Left** | Form structure tree — click to jump to any question |
-| **Center** | Live enketo form — fill it in like a data collector would |
-| **Right** | Debug tabs — variables, calculations, inspector, warnings |
+| **Left** | Form Structure — full group/repeat/question tree, click to scroll the form |
+| **Center** | Rendered form — interact with it as a field enumerator would |
+| **Right** | Debug tabs — Variables, Calculations, Inspector, Warnings, External Data, XLSForm source |
 
-All panels are drag-to-resize.
+All 3 panels are **resizable** — drag the dividers between them.
 
 ### Debug tabs
 
-**Variables**
-Live table of every field name, XPath, and current value. Click any value to override it manually — useful for testing skip logic without filling the whole form. Use "Non-empty only" to filter clutter.
+**Variables** — All form variables and their current values. Click any value cell to override it live (useful for testing skip logic without filling the whole form).
 
-**Calculations**
-All `calculate` fields with their formulas and live computed values. Click a value to override it for debugging downstream dependencies.
+**Calculations** — Every `calculate` field with its formula and live output. Auto-refreshes as you fill the form. Instantly see if a `pulldata()` is resolving correctly or returning NaN.
 
-**Inspector**
-Click any question in the center panel to inspect it. Shows:
-- Current value (live from enketo model)
-- All XForm metadata (type, label, hint, required, appearance)
-- Relevant/constraint/calculation expressions with evaluated results (✅/🚫/❌)
-- Choice list for select_one / select_multiple fields
-- Dependencies: what variables this field depends on (clickable chips)
-- Dependents: what other fields reference this one
+**Inspector** — Click any question in the form or the structure tree. Shows: type, label, relevant condition (✅ visible / 🚫 hidden), constraint (✅ passes / ❌ fails), current value, and which other fields depend on it.
 
-**Warnings**
-Automatically detected issues:
-- Undefined variable references (e.g. `${stm_confirmaion}` — typo)
-- Missing CSV files for `pulldata()`
-- Malformed XPath expressions
+**Warnings** — Static analysis: undefined `${variable}` references, missing CSV files, malformed expressions.
 
-**External Data**
-Shows all loaded CSV files and their row counts. Use this to confirm your `pulldata()` CSVs loaded correctly.
+**External Data** — Lists all loaded CSVs with row counts and column headers.
 
-**XLSForm Source**
-Raw view of your survey and choices sheets — useful for cross-referencing while debugging.
-
----
+**XLSForm Source** — Browse the survey and choices sheets as a table without opening Excel.
 
 ### Tips for debugging pulldata()
 
-1. Upload your CSV alongside the XLSForm
-2. Go to **External Data** tab — confirm the file appears and row count looks right
-3. Go to **Variables** tab — find the calculate field using `pulldata()` and check its value
-4. If the value is empty or `NaN`: check that the lookup key matches exactly (case-sensitive)
-5. Use **Inspector** → click the calculate field → see the formula and its current evaluated value
+1. Load your pulldata CSV via **+ CSV files**
+2. Open **Calculations** tab — find your `pulldata()` field
+3. If the live value shows `—` or NaN, check:
+   - CSV filename matches exactly what's in the formula
+   - The key column in your CSV matches the filter value you're selecting
+4. Override the filter field value directly in **Variables** to test different producers/parcels
 
-### Tips for debugging relevance / skip logic
+### Tips for debugging skip logic (relevant)
 
-1. Fill in the form until the question you expect to appear should show
-2. Click the hidden/visible question in the **tree** (left panel) to inspect it
-3. In **Inspector**, check the `relevant` expression and whether it evaluates to ✅ Visible or 🚫 Hidden
-4. Click any dependency chip to jump to that field and check its current value
-5. Use **Variables** tab to manually override a value and see if the question appears
+1. Open **Inspector** tab
+2. Click the question that's not showing/hiding correctly
+3. The relevant expression is shown with live evaluation — ✅ means currently visible
+4. Click the dependency chips to jump to the fields it depends on
+5. Or use **Variables** to override a field value and watch the form re-evaluate live
 
 ---
 
-## Running for your team (local network)
+## Sharing with your team (local network)
 
-**API:**
+Start both services with network exposure:
+
 ```bash
-cd api/
+# Terminal 1 — API
+cd api
 uvicorn main:app --host 0.0.0.0 --port 5050
+
+# Terminal 2 — Frontend
+cd app
+npm run dev -- --host
 ```
 
-**Frontend (build + serve):**
-```bash
-cd app/
-npm run build
-npx serve dist -p 5174
-# or with nginx: point root to app/dist/
-```
+Share your machine's IP: **http://192.168.x.x:5173**
 
-**Share the URL:**
-```
-http://<your-machine-ip>:5174
-```
-
-Anyone on the same network can open the debugger. The API must be running on port 5050 — the frontend is pre-configured to call it there.
-
-> **Note:** This is a local debug tool, not a production deployment. No authentication, no data persistence. Form data stays in the browser.
+Teammates only need a browser — no installation required on their end.
 
 ---
 
 ## Tech stack
 
-| Layer | Technology |
+| Layer | Tech |
 |---|---|
-| Form renderer | enketo-core + enketo-transformer |
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS |
-| XLSForm → XForm | pyxform (via FastAPI) |
-| API | FastAPI (Python) |
-| Layout | react-resizable-panels |
+| Form renderer | [enketo-core](https://github.com/enketo/enketo-core) — same engine as KoboToolbox |
+| XLSForm conversion | [pyxform](https://github.com/XLSForm/pyxform) via FastAPI |
+| Frontend | React 19 + TypeScript + Vite + Tailwind CSS |
+| Panels | react-resizable-panels |
 
 ---
 
-*Built for the PUR Projet data team. Questions → Naufal.*
+## Notes
+
+- The renderer is **unmodified enketo-core** — no custom patches. If it works here, it works in Kobo.
+- `jr://` image URLs in form hints will show a broken image in the browser — expected, doesn't affect form logic.
+- GPS/geoshape fields render but won't capture real coordinates in a browser environment.
