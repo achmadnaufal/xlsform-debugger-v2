@@ -81,12 +81,12 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
   );
 
   return (
-    <div className="bg-gray-900 border-b border-gray-700 px-4 py-3 flex items-center gap-4">
+    <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-4">
       <div
         className={`flex-1 border-2 border-dashed rounded-lg px-4 py-2 text-center cursor-pointer transition-colors ${
           dragOver
-            ? "border-blue-400 bg-blue-900/30"
-            : "border-gray-600 hover:border-gray-400"
+            ? "border-blue-400 bg-blue-50"
+            : "border-gray-300 hover:border-gray-400"
         }`}
         onDragOver={(e) => {
           e.preventDefault();
@@ -97,7 +97,7 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
         onClick={() => xlsxInputRef.current?.click()}
       >
         {loading ? (
-          <div className="flex items-center justify-center gap-2 text-blue-400">
+          <div className="flex items-center justify-center gap-2 text-blue-600">
             <svg
               className="animate-spin h-4 w-4"
               viewBox="0 0 24 24"
@@ -120,7 +120,7 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
             <span>Converting...</span>
           </div>
         ) : (
-          <span className="text-gray-300 text-sm">
+          <span className="text-gray-500 text-sm">
             {fileName
               ? `${fileName} — Drop or click to replace`
               : "Drop XLSForm (.xlsx) here or click to upload"}
@@ -137,7 +137,7 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
 
       <button
         type="button"
-        className="text-sm px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors whitespace-nowrap"
+        className="text-sm px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors whitespace-nowrap border border-gray-200"
         onClick={() => csvInputRef.current?.click()}
       >
         + CSV files
@@ -151,7 +151,7 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
         />
       </button>
       {csvFilesRef.current.length > 0 && (
-        <span className="text-xs text-gray-500">
+        <span className="text-xs text-gray-400">
           {csvFilesRef.current.length} CSV
           {csvFilesRef.current.length > 1 ? "s" : ""}
         </span>

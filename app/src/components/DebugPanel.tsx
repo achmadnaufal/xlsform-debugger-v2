@@ -36,9 +36,9 @@ export function DebugPanel({
   const [activeTab, setActiveTab] = useState<DebugTab>("variables");
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 text-gray-100">
+    <div className="flex flex-col h-full bg-white text-gray-900 border-l border-gray-200">
       {/* Tab bar */}
-      <div className="flex border-b border-gray-700 shrink-0 overflow-x-auto scrollbar-none">
+      <div className="flex border-b border-gray-200 shrink-0 overflow-x-auto scrollbar-none">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
           const count =
@@ -55,18 +55,18 @@ export function DebugPanel({
               onClick={() => setActiveTab(tab.id)}
               className={`px-3 py-2 text-xs font-medium transition-colors whitespace-nowrap ${
                 isActive
-                  ? "text-blue-400 border-b-2 border-blue-400 bg-gray-800"
-                  : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/50"
+                  ? "text-blue-600 border-b-2 border-blue-600 bg-white"
+                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
               }`}
             >
               {tab.label}
               {count !== null && count > 0 && (
-                <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-gray-700 text-[10px]">
+                <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-gray-200 text-[10px]">
                   {count}
                 </span>
               )}
               {tab.id === "question" && selectedQuestion && (
-                <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-blue-800 text-blue-300 text-[10px] font-mono">
+                <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-mono">
                   {selectedQuestion}
                 </span>
               )}

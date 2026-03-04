@@ -49,7 +49,7 @@ function EditableValue({
           if (e.key === "Enter") commit();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="w-full bg-gray-700 border border-blue-500 rounded px-1 py-0.5 text-xs font-mono text-blue-200 focus:outline-none"
+        className="w-full bg-gray-100 border border-blue-500 rounded px-1 py-0.5 text-xs font-mono text-blue-700 focus:outline-none"
       />
     );
   }
@@ -58,7 +58,7 @@ function EditableValue({
     <span
       title="Click to edit value"
       className={`font-mono text-xs cursor-pointer hover:underline ${
-        isNaN_ ? "text-red-400" : isEmpty ? "text-gray-600" : "text-green-300"
+        isNaN_ ? "text-red-600" : isEmpty ? "text-gray-400" : "text-green-700"
       }`}
       onClick={() => {
         setDraft(variable.value);
@@ -67,7 +67,7 @@ function EditableValue({
     >
       {isEmpty ? "—" : variable.value}
       {isOverridden && (
-        <span className="ml-1 text-[10px] bg-orange-800/50 text-orange-300 px-1 rounded">override</span>
+        <span className="ml-1 text-[10px] bg-orange-100 text-orange-600 px-1 rounded">override</span>
       )}
     </span>
   );
@@ -95,7 +95,7 @@ export function VariableInspector({ variables }: VariableInspectorProps) {
 
   if (variables.length === 0) {
     return (
-      <div className="p-4 text-gray-500 text-sm">
+      <div className="p-4 text-gray-400 text-sm">
         No variables yet. Load a form and interact with it.
       </div>
     );
@@ -103,15 +103,15 @@ export function VariableInspector({ variables }: VariableInspectorProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-3 py-2 border-b border-gray-700 flex gap-2 items-center shrink-0">
+      <div className="px-3 py-2 border-b border-gray-200 flex gap-2 items-center shrink-0">
         <input
           type="text"
           placeholder="Search field or value..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+          className="flex-1 bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500"
         />
-        <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer whitespace-nowrap">
+        <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer whitespace-nowrap">
           <input
             type="checkbox"
             checked={nonEmptyOnly}
@@ -123,11 +123,11 @@ export function VariableInspector({ variables }: VariableInspectorProps) {
       </div>
       <div className="overflow-auto flex-1">
         <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-gray-800">
-            <tr className="text-left text-gray-400 border-b border-gray-700">
-              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Field</th>
-              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">XPath</th>
-              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Value <span className="font-normal text-gray-600 normal-case">(click to edit)</span></th>
+          <thead className="sticky top-0 bg-gray-100">
+            <tr className="text-left text-gray-600 border-b border-gray-200">
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">Field</th>
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">XPath</th>
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">Value <span className="font-normal text-gray-400 normal-case">(click to edit)</span></th>
             </tr>
           </thead>
           <tbody>
@@ -136,10 +136,10 @@ export function VariableInspector({ variables }: VariableInspectorProps) {
               return (
                 <tr
                   key={v.xpath}
-                  className={`border-b border-gray-800 hover:bg-gray-800/50 ${!isEmpty ? "bg-gray-800/20" : ""}`}
+                  className={`border-b border-gray-100 hover:bg-gray-50 ${!isEmpty ? "bg-blue-50/30" : ""}`}
                 >
-                  <td className="px-3 py-1.5 text-blue-300 font-mono text-xs">{v.name}</td>
-                  <td className="px-3 py-1.5 text-gray-500 font-mono text-xs truncate max-w-48">{v.xpath}</td>
+                  <td className="px-3 py-1.5 text-blue-700 font-mono text-xs">{v.name}</td>
+                  <td className="px-3 py-1.5 text-gray-400 font-mono text-xs truncate max-w-48">{v.xpath}</td>
                   <td className="px-3 py-1.5 text-xs">
                     <EditableValue
                       variable={v}
@@ -153,7 +153,7 @@ export function VariableInspector({ variables }: VariableInspectorProps) {
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div className="p-4 text-gray-500 text-sm text-center">No matching variables.</div>
+          <div className="p-4 text-gray-400 text-sm text-center">No matching variables.</div>
         )}
       </div>
     </div>

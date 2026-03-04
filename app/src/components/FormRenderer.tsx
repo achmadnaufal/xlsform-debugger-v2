@@ -7,6 +7,7 @@ interface FormRendererProps {
   readonly externalData: readonly ExternalDataEntry[];
   readonly onModelUpdate: (state: FormState) => void;
   readonly onError: (error: string) => void;
+  readonly onQuestionSelect?: (name: string) => void;
 }
 
 interface TransformOutput {
@@ -19,13 +20,31 @@ export function FormRenderer({
   externalData,
   onModelUpdate,
   onError,
+  onQuestionSelect,
 }: FormRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [transformed, setTransformed] = useState<TransformOutput | null>(null);
 
   // Transform XForm XML using enketo-transformer (web build)
   useEffect(() => {
-    if (!xformXml) {
+  
+  // Wire question click → Inspector
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !onQuestionSelect) return;
+    const handler = (e: MouseEvent) => {
+      const question = (e.target as Element).closest('.question');
+      if (!question) return;
+      const input = question.querySelector('input, select, textarea');
+      const fullPath = input?.getAttribute('name') || question.getAttribute('data-name') || '';
+      const name = fullPath.split('/').pop() || '';
+      if (name) onQuestionSelect(name);
+    };
+    container.addEventListener('click', handler);
+    return () => container.removeEventListener('click', handler);
+  }, [formReady, onQuestionSelect]);
+
+  if (!xformXml) {
       setTransformed(null);
       return;
     }
@@ -86,6 +105,23 @@ export function FormRenderer({
       onError(`Form init errors: ${errors.join(", ")}`);
     }
   }, [errors, onError]);
+
+
+  // Wire question click → Inspector
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !onQuestionSelect) return;
+    const handler = (e: MouseEvent) => {
+      const question = (e.target as Element).closest('.question');
+      if (!question) return;
+      const input = question.querySelector('input, select, textarea');
+      const fullPath = input?.getAttribute('name') || question.getAttribute('data-name') || '';
+      const name = fullPath.split('/').pop() || '';
+      if (name) onQuestionSelect(name);
+    };
+    container.addEventListener('click', handler);
+    return () => container.removeEventListener('click', handler);
+  }, [formReady, onQuestionSelect]);
 
   if (!xformXml) {
     return (

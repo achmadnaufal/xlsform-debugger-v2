@@ -43,25 +43,25 @@ export default function App() {
   const handleQuestionSelect = useCallback((name: string) => { setSelectedQuestion(name); }, []);
 
   return (
-    <div className="h-screen flex flex-col bg-gray-950 text-gray-100 text-xs">
+    <div className="h-screen flex flex-col bg-gray-50 text-gray-900 text-xs">
       <FileUploadBar onConvert={handleConvert} onError={handleError} />
 
       {error && (
-        <div className="bg-red-900/90 text-red-200 px-4 py-2 text-sm flex items-center justify-between">
+        <div className="bg-red-100 text-red-700 px-4 py-2 text-sm flex items-center justify-between border-b border-red-200">
           <span>{error}</span>
-          <button type="button" onClick={() => setError(null)} className="text-red-400 hover:text-red-200 ml-4">&#10005;</button>
+          <button type="button" onClick={() => setError(null)} className="text-red-400 hover:text-red-600 ml-4">&#10005;</button>
         </div>
       )}
 
       <PanelGroup direction="horizontal" className="flex-1 overflow-hidden">
-        <Panel defaultSize={15} minSize={8} maxSize={30}>
+        <Panel defaultSize={18} minSize={10} maxSize={35}>
           <QuestionTree
             xformXml={xformXml}
             selectedQuestion={selectedQuestion}
             onSelect={handleQuestionSelect}
           />
         </Panel>
-        <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 cursor-col-resize transition-colors" />
+        <PanelResizeHandle className="w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize transition-colors" />
 
         <Panel defaultSize={45} minSize={25}>
           <div className="h-full overflow-auto">
@@ -70,12 +70,13 @@ export default function App() {
               externalData={externalData}
               onModelUpdate={handleModelUpdate}
               onError={handleError}
+              onQuestionSelect={handleQuestionSelect}
             />
           </div>
         </Panel>
-        <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 cursor-col-resize transition-colors" />
+        <PanelResizeHandle className="w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize transition-colors" />
 
-        <Panel defaultSize={40} minSize={20}>
+        <Panel defaultSize={37} minSize={20}>
           <DebugPanel
             formState={formState}
             warnings={warnings}

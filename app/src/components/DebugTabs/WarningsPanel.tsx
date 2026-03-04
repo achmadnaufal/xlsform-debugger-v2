@@ -32,7 +32,6 @@ export function WarningsPanel({ warnings, xformXml, variables }: WarningsPanelPr
     try {
       const fields = parseXFormFields(xformXml);
       const knownNames = new Set([...fields.keys()]);
-      // Also add variable names from live model
       for (const v of variables) knownNames.add(v.name);
 
       const expressions: Array<{ name: string; field: string; expr: string }> = [];
@@ -43,7 +42,6 @@ export function WarningsPanel({ warnings, xformXml, variables }: WarningsPanelPr
         if (f.choiceFilter) expressions.push({ name: f.name, field: "choice_filter", expr: f.choiceFilter });
       });
 
-      // Check undefined variable references
       for (const { name, field, expr } of expressions) {
         const refs = extractVarRefs(expr);
         for (const ref of refs) {
@@ -62,7 +60,6 @@ export function WarningsPanel({ warnings, xformXml, variables }: WarningsPanelPr
         }
       }
 
-      // Check missing CSV files
       const pulldataFiles = extractPulldataFiles(xformXml);
       const loadedIds = new Set((window.__externalData ?? []).map((d) => d.id));
       for (const file of pulldataFiles) {
@@ -82,7 +79,7 @@ export function WarningsPanel({ warnings, xformXml, variables }: WarningsPanelPr
 
   if (allWarnings.length === 0) {
     return (
-      <div className="p-4 text-gray-500 text-sm">
+      <div className="p-4 text-gray-400 text-sm">
         ✅ No warnings. The form looks clean.
       </div>
     );
@@ -102,19 +99,19 @@ export function WarningsPanel({ warnings, xformXml, variables }: WarningsPanelPr
           key={i}
           className={`flex gap-2 rounded px-3 py-2 text-xs border ${
             w.type === "undefined-ref" || w.type === "missing-csv"
-              ? "bg-red-900/20 border-red-800/30"
+              ? "bg-red-100 border-red-200"
               : w.type === "malformed"
-              ? "bg-orange-900/20 border-orange-800/30"
-              : "bg-yellow-900/20 border-yellow-800/30"
+              ? "bg-orange-100 border-orange-200"
+              : "bg-yellow-100 border-yellow-200"
           }`}
         >
           <span className="shrink-0">{iconMap[w.type]}</span>
           <span className={`${
             w.type === "undefined-ref" || w.type === "missing-csv"
-              ? "text-red-200"
+              ? "text-red-700"
               : w.type === "malformed"
-              ? "text-orange-200"
-              : "text-yellow-200"
+              ? "text-orange-700"
+              : "text-yellow-700"
           }`}>{w.message}</span>
         </div>
       ))}
