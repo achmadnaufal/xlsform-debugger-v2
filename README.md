@@ -11,7 +11,7 @@
 
 - **Renders your form exactly as KoboToolbox would** — same engine (enketo-core), same logic
 - **Loads your pulldata CSVs** — see real values resolve in the form
-- **Live variable inspector** — all 600+ variables with current values, editable for testing
+- **Live variable inspector** — all form variables with current values, editable for testing
 - **Calculations panel** — every `calculate` field with its formula and live output
 - **Question inspector** — click any question to see its metadata, relevant/constraint evaluation, dependencies
 - **Form structure tree** — collapsible hierarchy of all groups, repeats, and questions with status indicators
@@ -22,17 +22,17 @@
 
 ## Screenshots
 
-### Form rendered alongside debug panels
+### Full overview — form rendered alongside debug panels
 ![Overview](docs/screenshot-overview.png)
 
 ### Calculations — live values for all calculated fields
 ![Calculations](docs/screenshot-calculations.png)
 
-### Inspector — click any question to inspect metadata, relevance, dependencies
+### Inspector — click any question to see metadata, relevance, and dependencies
 ![Inspector](docs/screenshot-inspector.png)
 
-### Variables — all form variables, editable for testing
-![Variables](docs/screenshot-variables.png)
+### Warnings — static analysis of your form logic
+![Warnings](docs/screenshot-warnings.png)
 
 ---
 
@@ -77,6 +77,8 @@ npm run dev
 ### 6. Open
 → **http://localhost:5173**
 
+> A sample form and pulldata CSV are in the `docs/` folder if you want to try it immediately.
+
 ---
 
 ## How to use
@@ -90,8 +92,8 @@ npm run dev
 
 | Panel | What it shows |
 |---|---|
-| **Left** | Form Structure — full group/repeat/question tree, click to scroll the form |
-| **Center** | Rendered form — interact with it as a field enumerator would |
+| **Left** | Form Structure — full group/repeat/question tree, click to scroll to any question |
+| **Center** | Rendered form — interact with it exactly as a field enumerator would |
 | **Right** | Debug tabs — Variables, Calculations, Inspector, Warnings, External Data, XLSForm source |
 
 All 3 panels are **resizable** — drag the dividers between them.
@@ -100,7 +102,7 @@ All 3 panels are **resizable** — drag the dividers between them.
 
 **Variables** — All form variables and their current values. Click any value cell to override it live (useful for testing skip logic without filling the whole form).
 
-**Calculations** — Every `calculate` field with its formula and live output. Auto-refreshes as you fill the form. Instantly see if a `pulldata()` is resolving correctly or returning NaN.
+**Calculations** — Every `calculate` field with its formula and live output. Auto-refreshes as you interact with the form. Instantly see if a `pulldata()` is resolving correctly or returning NaN.
 
 **Inspector** — Click any question in the form or the structure tree. Shows: type, label, relevant condition (✅ visible / 🚫 hidden), constraint (✅ passes / ❌ fails), current value, and which other fields depend on it.
 
@@ -123,9 +125,9 @@ All 3 panels are **resizable** — drag the dividers between them.
 
 1. Open **Inspector** tab
 2. Click the question that's not showing/hiding correctly
-3. The relevant expression is shown with live evaluation — ✅ means currently visible
+3. The relevant expression shows with live evaluation — ✅ means currently visible
 4. Click the dependency chips to jump to the fields it depends on
-5. Or use **Variables** to override a field value and watch the form re-evaluate live
+5. Use **Variables** to override a field value and watch the form re-evaluate instantly
 
 ---
 
@@ -143,9 +145,24 @@ cd app
 npm run dev -- --host
 ```
 
-Share your machine's IP: **http://192.168.x.x:5173**
+Share your machine's local IP: **http://192.168.x.x:5173**
 
 Teammates only need a browser — no installation required on their end.
+
+---
+
+## Planned improvements
+
+See [PLANNING.md](PLANNING.md) for full details.
+
+| Feature | Status |
+|---|---|
+| **Geoshape / map rendering** | Planned — next milestone. Currently shows a blank map; fix requires swapping Google Maps tiles for OpenStreetMap (no API key needed). See [PLANNING.md](PLANNING.md). |
+| Multi-language switcher | Backlog |
+| CSV data editor (inline) | Backlog |
+| Form submission XML export | Backlog |
+| Form diff (v1 vs v2) | Backlog |
+| Offline / PWA support | Backlog |
 
 ---
 
@@ -163,5 +180,5 @@ Teammates only need a browser — no installation required on their end.
 ## Notes
 
 - The renderer is **unmodified enketo-core** — no custom patches. If it works here, it works in Kobo.
-- `jr://` image URLs in form hints will show a broken image in the browser — expected, doesn't affect form logic.
-- GPS/geoshape fields render but won't capture real coordinates in a browser environment.
+- `jr://` image URLs in form hints will show a broken image warning — expected, doesn't affect form logic.
+- GPS/geoshape fields render but map tiles are currently blank (see planned improvements above).
