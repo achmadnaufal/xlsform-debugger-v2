@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+
+#root {
+  height: 100vh;
+}
+
+/* Scope enketo styles to prevent conflicts with app UI */
+.enketo-form-container {
+  font-size: 14px;
+}
+
+.enketo-form-container .or {
+  max-width: none;
+}

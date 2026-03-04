@@ -1,0 +1,17 @@
+// enketo-transformer runner — called by Python API as subprocess
+// Usage: node transform.mjs <xform_xml_file> <output_json_file>
+import { readFileSync, writeFileSync } from 'fs';
+import { transform } from 'enketo-transformer';
+
+const xformPath = process.argv[2];
+const outputPath = process.argv[3];
+
+try {
+  const xformXml = readFileSync(xformPath, 'utf8');
+  const result = await transform({ xform: xformXml, markdown: true, media: {} });
+  writeFileSync(outputPath, JSON.stringify({ form: result.form, model: result.model }));
+  process.exit(0);
+} catch(e) {
+  writeFileSync(outputPath, JSON.stringify({ error: e.message }));
+  process.exit(1);
+}
