@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { FileUploadBar } from "./components/FileUploadBar";
 import { FormRenderer } from "./components/FormRenderer";
 import { DebugPanel } from "./components/DebugPanel";
@@ -19,14 +20,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [selectedQuestion, setSelectedQuestion] = useState<string | null>(null);
 
-  // Expose globals for debug panel
-  useEffect(() => {
-    window.__xformXml = xformXml;
-  }, [xformXml]);
-
-  useEffect(() => {
-    window.__externalData = externalData;
-  }, [externalData]);
+  useEffect(() => { window.__xformXml = xformXml; }, [xformXml]);
+  useEffect(() => { window.__externalData = externalData; }, [externalData]);
 
   const handleConvert = useCallback(
     (xform: string, conversionWarnings: readonly string[], extData: readonly ExternalDataEntry[]) => {
@@ -43,47 +38,33 @@ export default function App() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).__loadForm = (x: string, e: ExternalDataEntry[]) => handleConvert(x, [], e ?? []);
 
-  const handleError = useCallback((msg: string) => {
-    setError(msg);
-  }, []);
-
-  const handleModelUpdate = useCallback((state: FormState) => {
-    setFormState(state);
-  }, []);
-
-  const handleQuestionSelect = useCallback((name: string) => {
-    setSelectedQuestion(name);
-  }, []);
+  const handleError = useCallback((msg: string) => { setError(msg); }, []);
+  const handleModelUpdate = useCallback((state: FormState) => { setFormState(state); }, []);
+  const handleQuestionSelect = useCallback((name: string) => { setSelectedQuestion(name); }, []);
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      {/* Top bar */}
+    <div className="h-screen flex flex-col bg-gray-950 text-gray-100 text-xs">
       <FileUploadBar onConvert={handleConvert} onError={handleError} />
 
-      {/* Error toast */}
       {error && (
         <div className="bg-red-900/90 text-red-200 px-4 py-2 text-sm flex items-center justify-between">
           <span>{error}</span>
-          <button
-            type="button"
-            onClick={() => setError(null)}
-            className="text-red-400 hover:text-red-200 ml-4"
-          >
-            &#10005;
-          </button>
+          <button type="button" onClick={() => setError(null)} className="text-red-400 hover:text-red-200 ml-4">&#10005;</button>
         </div>
       )}
 
-      {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left: Question Tree sidebar + Form */}
-        <div className="flex flex-1 border-r border-gray-200 overflow-hidden">
+      <PanelGroup direction="horizontal" className="flex-1 overflow-hidden">
+        <Panel defaultSize={15} minSize={8} maxSize={30}>
           <QuestionTree
             xformXml={xformXml}
             selectedQuestion={selectedQuestion}
             onSelect={handleQuestionSelect}
           />
-          <div className="flex-1 overflow-hidden">
+        </Panel>
+        <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 cursor-col-resize transition-colors" />
+
+        <Panel defaultSize={45} minSize={25}>
+          <div className="h-full overflow-auto">
             <FormRenderer
               xformXml={xformXml}
               externalData={externalData}
@@ -91,9 +72,10 @@ export default function App() {
               onError={handleError}
             />
           </div>
-        </div>
-        {/* Right: Debug panel */}
-        <div className="w-2/5 overflow-hidden">
+        </Panel>
+        <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 cursor-col-resize transition-colors" />
+
+        <Panel defaultSize={40} minSize={20}>
           <DebugPanel
             formState={formState}
             warnings={warnings}
@@ -101,8 +83,8 @@ export default function App() {
             selectedQuestion={selectedQuestion}
             onQuestionSelect={handleQuestionSelect}
           />
-        </div>
-      </div>
+        </Panel>
+      </PanelGroup>
     </div>
   );
 }

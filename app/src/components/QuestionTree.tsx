@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 interface QuestionTreeProps {
   readonly xformXml: string | null;
   readonly selectedQuestion: string | null;
-  readonly onSelect: (name: string, xpath: string) => void;
+  readonly onSelect: (name: string, xpath?: string) => void;
 }
 
 type NodeType =
@@ -127,7 +127,7 @@ function TreeNodeItem({
 }: {
   node: TreeNode;
   selectedQuestion: string | null;
-  onSelect: (name: string, xpath: string) => void;
+  onSelect: (name: string, xpath?: string) => void;
   depth: number;
 }) {
   const [expanded, setExpanded] = useState(true);
