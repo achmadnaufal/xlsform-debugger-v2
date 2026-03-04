@@ -1,7 +1,8 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { FileUploadBar } from "./components/FileUploadBar";
 import { FormRenderer } from "./components/FormRenderer";
 import { DebugPanel } from "./components/DebugPanel";
+import { QuestionTree } from "./components/QuestionTree";
 import type { ExternalDataEntry, FormState } from "./types";
 
 const EMPTY_STATE: FormState = {
@@ -16,6 +17,16 @@ export default function App() {
   const [formState, setFormState] = useState<FormState>(EMPTY_STATE);
   const [externalData, setExternalData] = useState<readonly ExternalDataEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [selectedQuestion, setSelectedQuestion] = useState<string | null>(null);
+
+  // Expose globals for debug panel
+  useEffect(() => {
+    window.__xformXml = xformXml;
+  }, [xformXml]);
+
+  useEffect(() => {
+    window.__externalData = externalData;
+  }, [externalData]);
 
   const handleConvert = useCallback(
     (xform: string, conversionWarnings: readonly string[], extData: readonly ExternalDataEntry[]) => {
@@ -24,12 +35,13 @@ export default function App() {
       setWarnings(conversionWarnings);
       setExternalData(extData);
       setFormState(EMPTY_STATE);
+      setSelectedQuestion(null);
     },
     []
   );
 
-  // @ts-ignore
-  (window as any).__loadForm = (x: string, e: any[]) => handleConvert(x, [], e ?? []);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).__loadForm = (x: string, e: ExternalDataEntry[]) => handleConvert(x, [], e ?? []);
 
   const handleError = useCallback((msg: string) => {
     setError(msg);
@@ -37,6 +49,10 @@ export default function App() {
 
   const handleModelUpdate = useCallback((state: FormState) => {
     setFormState(state);
+  }, []);
+
+  const handleQuestionSelect = useCallback((name: string) => {
+    setSelectedQuestion(name);
   }, []);
 
   return (
@@ -58,21 +74,32 @@ export default function App() {
         </div>
       )}
 
-      {/* Main content: form (60%) + debugger (40%) */}
+      {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
-        <div className="w-3/5 border-r border-gray-200 overflow-hidden">
-          <FormRenderer
+        {/* Left: Question Tree sidebar + Form */}
+        <div className="flex flex-1 border-r border-gray-200 overflow-hidden">
+          <QuestionTree
             xformXml={xformXml}
-            externalData={externalData}
-            onModelUpdate={handleModelUpdate}
-            onError={handleError}
+            selectedQuestion={selectedQuestion}
+            onSelect={handleQuestionSelect}
           />
+          <div className="flex-1 overflow-hidden">
+            <FormRenderer
+              xformXml={xformXml}
+              externalData={externalData}
+              onModelUpdate={handleModelUpdate}
+              onError={handleError}
+            />
+          </div>
         </div>
+        {/* Right: Debug panel */}
         <div className="w-2/5 overflow-hidden">
           <DebugPanel
             formState={formState}
             warnings={warnings}
             xformXml={xformXml}
+            selectedQuestion={selectedQuestion}
+            onQuestionSelect={handleQuestionSelect}
           />
         </div>
       </div>
