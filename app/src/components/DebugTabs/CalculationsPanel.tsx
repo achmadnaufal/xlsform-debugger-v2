@@ -189,10 +189,10 @@ export function CalculationsPanel({ xformXml }: CalculationsPanelProps) {
         <table className="w-full text-xs">
           <thead className="sticky top-0 bg-gray-800">
             <tr className="text-left text-gray-400 border-b border-gray-700">
-              <th className="px-3 py-2 font-medium">Name</th>
-              <th className="px-3 py-2 font-medium">Label</th>
-              <th className="px-3 py-2 font-medium max-w-48">Formula</th>
-              <th className="px-3 py-2 font-medium">Live Value</th>
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Name</th>
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Label</th>
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400 max-w-48">Formula</th>
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Live Value</th>
             </tr>
           </thead>
           <tbody>
