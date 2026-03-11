@@ -24,6 +24,19 @@ export interface FieldEdit {
 /** Maps field names to their pending edits */
 export type EditsMap = Map<string, FieldEdit>;
 
+/** Payload for syncing Inspector edits back to XLSForm sheets */
+export interface SheetsUpdatePayload {
+  readonly fieldName: string;
+  readonly edits: FieldEdit;
+  readonly meta: {
+    readonly bodyTag: string;
+    readonly hasCalc: boolean;
+    readonly isReadonly: boolean;
+    readonly mediatype: string;
+    readonly listName: string;
+  };
+}
+
 /** Properties that can be edited on a field */
 export type EditableProperty =
   | "type"

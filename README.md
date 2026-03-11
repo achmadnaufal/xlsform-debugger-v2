@@ -17,6 +17,8 @@
 - **Form structure tree** — collapsible hierarchy of all groups, repeats, and questions with status indicators
 - **Warnings** — catches undefined variable references, missing CSVs, malformed expressions
 - **XLSForm source viewer** — browse the raw survey/choices sheets without opening Excel
+- **Inspector → XLSForm sync** — edits in the Inspector are reflected in the XLSForm tab instantly
+- **XLSX export** — download the current (edited) form as an Excel file
 
 ---
 
@@ -116,7 +118,7 @@ All 3 panels are **resizable** — drag the dividers between them.
 
 **External Data** — Lists all loaded CSVs with row counts and column headers.
 
-**XLSForm Source** — Browse the survey and choices sheets as a table without opening Excel.
+**XLSForm Source** — Browse the survey and choices sheets as a table without opening Excel. Edits made in the Inspector are synced back to the XLSForm view in real-time. Click **Export XLSX** to download the current (edited) form as an Excel file.
 
 ### Tips for debugging pulldata()
 
@@ -163,6 +165,10 @@ See [PLANNING.md](PLANNING.md) for full details.
 
 | Feature | Status |
 |---|---|
+| ~~Inspector → XLSForm sync~~ | **Done** — edits sync to XLSForm tab in real-time |
+| ~~XLSX export~~ | **Done** — download edited form as `.xlsx` |
+| ~~Scrollable sheet tabs~~ | **Done** — sheet tabs scroll with arrows when >6 sheets |
+| Preserve Excel formatting in export | Next — maintain colors, column widths, etc. from the uploaded file |
 | **Geoshape / map rendering** | Planned — next milestone. Currently shows a blank map; fix requires swapping Google Maps tiles for OpenStreetMap (no API key needed). See [PLANNING.md](PLANNING.md). |
 | Multi-language switcher | Backlog |
 | CSV data editor (inline) | Backlog |

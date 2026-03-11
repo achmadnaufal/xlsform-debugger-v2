@@ -4,7 +4,9 @@ import { MergedValuesPanel } from "./DebugTabs/MergedValuesPanel";
 import { WarningsPanel } from "./DebugTabs/WarningsPanel";
 import { XLSFormSource } from "./DebugTabs/XLSFormSource";
 import { ExternalDataPanel } from "./DebugTabs/ExternalDataPanel";
+import { tab } from "../lib/styles";
 import type { FormState, XlsFormSheets } from "../types";
+import type { SheetsUpdatePayload } from "../types/editor";
 
 type DebugTab = "inspector" | "values" | "warnings" | "external" | "source";
 
@@ -15,8 +17,8 @@ interface DebugPanelProps {
   readonly xlsformSheets: XlsFormSheets;
   readonly selectedQuestion: string | null;
   readonly onQuestionSelect: (name: string) => void;
-  readonly onXformSave: (xml: string) => void;
-  readonly onXformUpdate: (xml: string) => void;
+  readonly onXformSave: (xml: string, sheetsUpdate?: SheetsUpdatePayload) => void;
+  readonly onXformUpdate: (xml: string, sheetsUpdate?: SheetsUpdatePayload) => void;
 }
 
 const TABS: readonly { readonly id: DebugTab; readonly label: string }[] = [
@@ -42,34 +44,33 @@ export function DebugPanel({
   return (
     <div className="flex flex-col h-full bg-white text-gray-900 border-l border-gray-200">
       {/* Tab bar */}
-      <div className="flex border-b border-gray-200 shrink-0 overflow-x-auto scrollbar-none">
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.id;
+      <div className="flex border-b border-gray-200 shrink-0 overflow-x-auto scrollbar-none" role="tablist">
+        {TABS.map((t) => {
+          const isActive = activeTab === t.id;
           const count =
-            tab.id === "values"
+            t.id === "values"
               ? formState.variables.length
-              : tab.id === "warnings"
+              : t.id === "warnings"
               ? warnings.length
               : null;
 
           return (
             <button
-              key={tab.id}
+              key={t.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-3 py-2 text-xs font-medium transition-colors whitespace-nowrap ${
-                isActive
-                  ? "text-blue-600 border-b-2 border-blue-600 bg-white"
-                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-              }`}
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={`tabpanel-${t.id}`}
+              onClick={() => setActiveTab(t.id)}
+              className={`${tab.base} ${isActive ? tab.active : tab.inactive}`}
             >
-              {tab.label}
+              {t.label}
               {count !== null && count > 0 && (
                 <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-gray-200 text-[10px]">
                   {count}
                 </span>
               )}
-              {tab.id === "inspector" && selectedQuestion && (
+              {t.id === "inspector" && selectedQuestion && (
                 <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-mono">
                   {selectedQuestion}
                 </span>
@@ -80,7 +81,7 @@ export function DebugPanel({
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden" role="tabpanel" id={`tabpanel-${activeTab}`}>
         {activeTab === "inspector" && (
           <FieldEditorInspector
             xformXml={xformXml}

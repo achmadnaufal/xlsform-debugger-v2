@@ -84,6 +84,44 @@ Use a form with `geopoint`, `geoshape`, or `geotrace` fields. Verify:
 
 ---
 
+## Next: Preserve Excel Formatting in XLSX Export
+
+### Problem
+The XLSX export creates a plain workbook from the sheet data JSON. The original uploaded Excel file often has formatting (column colors, header backgrounds, column widths, frozen panes, conditional formatting) that makes it readable. The exported file loses all of this.
+
+### Fix Plan
+
+**Step 1: Store the original workbook styles on upload**
+
+In `api/main.py` `_parse_xlsform_sheets()`, also extract formatting metadata from the original workbook:
+- Column widths per sheet
+- Header row fill colors and font styles
+- Cell number formats
+- Frozen panes
+
+Store as a separate `xlsform_styles` dict alongside `xlsform_sheets`.
+
+**Step 2: Apply styles during export**
+
+In `POST /export`, accept an optional `xlsform_styles` payload and apply the stored formatting when building the workbook:
+- Set column widths
+- Apply header fill/font
+- Set number formats on data cells
+- Freeze panes
+
+**Step 3: Alternative — keep original workbook bytes**
+
+A simpler approach: store the original `.xlsx` bytes (base64) and at export time, load the original workbook with openpyxl (preserving styles), then patch only the changed cell values. This preserves all formatting, conditional formatting, merged cells, etc. with zero style extraction logic.
+
+### Files to change
+| File | Change |
+|---|---|
+| `api/main.py` | Store original workbook bytes or styles; apply during export |
+| `app/src/App.tsx` | Pass original workbook data through state |
+| `app/src/types/index.ts` | Add style/workbook types if needed |
+
+---
+
 ## Backlog
 
 ### Offline / PWA support

@@ -16,12 +16,18 @@ import pyxform.errors
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 app = FastAPI(title="XLSForm Debugger v2 API")
 
+_cors_origins = os.environ.get(
+    "CORS_ORIGINS", "http://localhost:5173,http://localhost:5174"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174"],
+    allow_origins=[o.strip() for o in _cors_origins],
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
@@ -205,6 +211,61 @@ async def validate(
         raise HTTPException(status_code=500, detail="An internal error occurred")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+class ExportRequest(BaseModel):
+    xlsform_sheets: dict[str, list[dict[str, object]]]
+
+    model_config = {"arbitrary_types_allowed": True}
+
+
+@app.post("/export")
+async def export_xlsx(body: ExportRequest):
+    """Build an .xlsx workbook from xlsformSheets JSON and return it as a download."""
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    # Track the default sheet so we can remove it after adding real sheets
+    default_sheet = wb.active
+
+    for sheet_name, rows in body.xlsform_sheets.items():
+        ws = wb.create_sheet(title=sheet_name[:31])  # Excel limits to 31 chars
+        if not rows:
+            continue
+
+        # Preserve column order from the first row
+        headers = list(rows[0].keys())
+        for later_row in rows[1:]:
+            for k in later_row:
+                if k not in headers:
+                    headers.append(k)
+
+        # Write header row
+        for col_idx, header in enumerate(headers, start=1):
+            ws.cell(row=1, column=col_idx, value=header)
+
+        # Write data rows
+        for row_idx, row_data in enumerate(rows, start=2):
+            for col_idx, header in enumerate(headers, start=1):
+                val = row_data.get(header, "")
+                # Convert non-string/non-numeric values to string for Excel
+                if isinstance(val, (list, dict)):
+                    val = str(val)
+                ws.cell(row=row_idx, column=col_idx, value=val if val is not None else "")
+
+    # Remove the default "Sheet" if we added real sheets
+    if default_sheet is not None and len(wb.sheetnames) > 1:
+        wb.remove(default_sheet)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="xlsform_export.xlsx"'},
+    )
 
 
 @app.get("/health")

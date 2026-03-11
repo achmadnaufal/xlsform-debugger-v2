@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import type { FormVariable } from "../../types";
-import type { FieldEdit } from "../../types/editor";
+import type { FieldEdit, SheetsUpdatePayload } from "../../types/editor";
 import type { FieldMeta, LocalizedText } from "../../utils/xformParser";
 import { parseXFormFields, extractVarRefs, getDefaultText, parseFormLanguages } from "../../utils/xformParser";
 import { applyEditsToXform } from "../../utils/xformMutator";
@@ -9,11 +9,11 @@ import {
   EditableFormula,
   EditableTextField,
   RequiredToggle,
-  DependencyChips,
   getFormulaStatus,
 } from "../shared/EditableFields";
 import { LanguageSelector } from "../shared/LanguageSelector";
 import { useStatus } from "../../contexts/StatusContext";
+import { btn } from "../../lib/styles";
 import {
   XLSFORM_TYPES,
   type XlsFormType,
@@ -86,8 +86,8 @@ interface FieldEditorInspectorProps {
   readonly xformXml: string | null;
   readonly selectedQuestion: string | null;
   readonly onQuestionSelect: (name: string) => void;
-  readonly onXformSave: (xml: string) => void;
-  readonly onXformUpdate: (xml: string) => void;
+  readonly onXformSave: (xml: string, sheetsUpdate?: SheetsUpdatePayload) => void;
+  readonly onXformUpdate: (xml: string, sheetsUpdate?: SheetsUpdatePayload) => void;
   readonly variables: readonly FormVariable[];
 }
 
@@ -237,23 +237,38 @@ export function FieldEditorInspector({
     }
   }, [xformXml, field, edits]);
 
+  const buildSheetsUpdate = useCallback((): SheetsUpdatePayload | undefined => {
+    if (!field || !hasEdits(edits)) return undefined;
+    return {
+      fieldName: field.name,
+      edits,
+      meta: {
+        bodyTag: edits.bodyTag ?? field.bodyTag,
+        hasCalc: !!(edits.calculation ?? field.calculation),
+        isReadonly: (edits.readonly ?? field.readonly) === "true()",
+        mediatype: edits.mediatype ?? field.mediatype,
+        listName: field.listName,
+      },
+    };
+  }, [field, edits]);
+
   const handleSave = useCallback(() => {
     const newXml = applyEdits();
     if (newXml) {
-      onXformSave(newXml);
+      onXformSave(newXml, buildSheetsUpdate());
       setEdits({});
     }
-  }, [applyEdits, onXformSave]);
+  }, [applyEdits, onXformSave, buildSheetsUpdate]);
 
   const handleSaveAndRerender = useCallback(() => {
     setStatus("applying");
     const newXml = applyEdits();
     if (newXml) {
-      onXformUpdate(newXml);
+      onXformUpdate(newXml, buildSheetsUpdate());
       setEdits({});
     }
     setStatus("idle");
-  }, [applyEdits, onXformUpdate, setStatus]);
+  }, [applyEdits, onXformUpdate, setStatus, buildSheetsUpdate]);
 
   const handleRevert = useCallback(() => {
     setEdits({});
@@ -345,14 +360,14 @@ export function FieldEditorInspector({
               <button
                 type="button"
                 onClick={cancelDiscard}
-                className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                className={btn.sm.secondary}
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={confirmDiscard}
-                className="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded hover:bg-red-700"
+                className={btn.sm.danger}
               >
                 Discard
               </button>
@@ -385,7 +400,7 @@ export function FieldEditorInspector({
       {error && (
         <div className="mx-3 mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
           {error}
-          <button type="button" onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">
+          <button type="button" onClick={() => setError(null)} className="ml-2 text-red-500 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">
             &#10005;
           </button>
         </div>
@@ -556,7 +571,7 @@ export function FieldEditorInspector({
                 <button
                   key={dep}
                   onClick={() => handleQuestionSelect(dep)}
-                  className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-blue-600 text-xs font-mono rounded transition-colors"
+                  className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-blue-600 text-xs font-mono rounded transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                 >
                   {dep}
                 </button>
@@ -572,7 +587,7 @@ export function FieldEditorInspector({
                 <button
                   key={`${d.name}:${d.field}`}
                   onClick={() => handleQuestionSelect(d.name)}
-                  className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-purple-600 text-xs font-mono rounded transition-colors"
+                  className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-purple-600 text-xs font-mono rounded transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                   title={`via ${d.field}`}
                 >
                   {d.name}
@@ -590,10 +605,10 @@ export function FieldEditorInspector({
           type="button"
           onClick={handleSave}
           disabled={!modified}
-          className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
+          className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
             modified
-              ? "border border-blue-600 text-blue-600 hover:bg-blue-50"
-              : "border border-gray-300 text-gray-400 cursor-not-allowed"
+              ? "bg-blue-50 border border-blue-600 text-blue-700 hover:bg-blue-100"
+              : "bg-gray-100 border border-gray-300 text-gray-400 cursor-not-allowed"
           }`}
         >
           Save
@@ -602,10 +617,10 @@ export function FieldEditorInspector({
           type="button"
           onClick={handleSaveAndRerender}
           disabled={!modified}
-          className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
+          className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
             modified
-              ? "bg-blue-600 text-white hover:bg-blue-700"
-              : "bg-gray-200 text-gray-400 cursor-not-allowed"
+              ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+              : "bg-gray-100 border border-gray-300 text-gray-400 cursor-not-allowed"
           }`}
         >
           Save & Re-render
@@ -616,7 +631,7 @@ export function FieldEditorInspector({
             <button
               type="button"
               onClick={handleRevert}
-              className="px-3 py-1.5 rounded text-xs font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
+              className={`${btn.sm.secondary} font-semibold`}
             >
               Revert
             </button>
