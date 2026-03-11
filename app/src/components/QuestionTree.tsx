@@ -24,6 +24,7 @@ type NodeType =
   | "audio"
   | "video"
   | "barcode"
+  | "hidden"
   | "unknown";
 
 interface TreeNode {
@@ -52,14 +53,16 @@ const TYPE_ICONS: Record<NodeType, string> = {
   audio: "🔊",
   video: "🎬",
   barcode: "▦",
+  hidden: "⚙",
   unknown: "?",
 };
 
-function getNodeType(tag: string, bindType: string): NodeType {
+function getNodeType(tag: string, bindType: string, hasCalculate = false): NodeType {
   if (tag === "group") return "group";
   if (tag === "repeat") return "repeat";
   if (tag === "select1") return "select_one";
   if (tag === "select") return "select_multiple";
+  if (hasCalculate) return "calculate";
   const t = bindType.toLowerCase();
   if (["text", "integer", "decimal", "geopoint", "date", "time", "datetime", "image", "audio", "video", "barcode"].includes(t)) {
     return t as NodeType;
@@ -95,17 +98,77 @@ function parseChildren(parent: Element, bindMap: Map<string, string>, prefix: st
   return nodes;
 }
 
+function collectNames(nodes: TreeNode[], names: Set<string>): void {
+  for (const node of nodes) {
+    names.add(node.name);
+    collectNames(node.children, names);
+  }
+}
+
 function buildTree(xmlString: string): TreeNode[] {
   const doc = new DOMParser().parseFromString(xmlString, "application/xml");
   const bindMap = new Map<string, string>();
+  const bindNodesets = new Map<string, string>();
+  const bindHasCalc = new Map<string, boolean>();
   doc.querySelectorAll("bind").forEach((bind) => {
     const nodeset = bind.getAttribute("nodeset") ?? "";
     const name = nodeset.split("/").pop() ?? "";
+    if (!name) return;
     bindMap.set(name, bind.getAttribute("type") ?? "");
+    bindNodesets.set(name, nodeset);
+    bindHasCalc.set(name, !!bind.getAttribute("calculate"));
   });
+  // Build itext lookup for hidden field labels
+  const itextLabels = new Map<string, string>();
+  const translations = doc.querySelectorAll("itext translation");
+  if (translations.length > 0) {
+    // Use the first translation for tree display
+    const firstTranslation = translations[0];
+    for (const text of Array.from(firstTranslation.querySelectorAll("text"))) {
+      const id = text.getAttribute("id") ?? "";
+      if (id.endsWith(":label")) {
+        const valueEl = text.querySelector("value");
+        const val = valueEl?.textContent?.trim() ?? "";
+        if (val) itextLabels.set(id, val);
+      }
+    }
+  }
+
   const body = doc.querySelector("h\\:body, body");
-  if (!body) return [];
-  return parseChildren(body, bindMap, "");
+  const bodyNodes = body ? parseChildren(body, bindMap, "") : [];
+
+  // Find bind-only fields not present in body
+  const bodyNames = new Set<string>();
+  collectNames(bodyNodes, bodyNames);
+
+  const hiddenNodes: TreeNode[] = [];
+  bindMap.forEach((type, name) => {
+    if (!bodyNames.has(name)) {
+      const hasCalc = bindHasCalc.get(name) ?? false;
+      const nodeType = hasCalc ? "calculate" as NodeType : "hidden" as NodeType;
+      const nodeset = bindNodesets.get(name) ?? name;
+      const itextLabel = itextLabels.get(`${nodeset}:label`) ?? "";
+      hiddenNodes.push({
+        name,
+        xpath: nodeset,
+        label: itextLabel,
+        nodeType,
+        children: [],
+      });
+    }
+  });
+
+  if (hiddenNodes.length > 0) {
+    bodyNodes.push({
+      name: "__meta__",
+      xpath: "",
+      label: "Meta / Hidden",
+      nodeType: "group",
+      children: hiddenNodes,
+    });
+  }
+
+  return bodyNodes;
 }
 
 function getQuestionStatus(name: string): "active" | "hidden" | "answered" | "empty" {

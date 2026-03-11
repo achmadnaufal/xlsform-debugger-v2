@@ -1,26 +1,27 @@
 import { useState } from "react";
-import { VariableInspector } from "./DebugTabs/VariableInspector";
-import { CalculationsPanel } from "./DebugTabs/CalculationsPanel";
-import { QuestionInspector } from "./DebugTabs/QuestionInspector";
+import { FieldEditorInspector } from "./DebugTabs/FieldEditorInspector";
+import { MergedValuesPanel } from "./DebugTabs/MergedValuesPanel";
 import { WarningsPanel } from "./DebugTabs/WarningsPanel";
 import { XLSFormSource } from "./DebugTabs/XLSFormSource";
 import { ExternalDataPanel } from "./DebugTabs/ExternalDataPanel";
-import type { FormState } from "../types";
+import type { FormState, XlsFormSheets } from "../types";
 
-type DebugTab = "variables" | "calculations" | "question" | "warnings" | "external" | "source";
+type DebugTab = "inspector" | "values" | "warnings" | "external" | "source";
 
 interface DebugPanelProps {
   readonly formState: FormState;
   readonly warnings: readonly string[];
   readonly xformXml: string | null;
+  readonly xlsformSheets: XlsFormSheets;
   readonly selectedQuestion: string | null;
   readonly onQuestionSelect: (name: string) => void;
+  readonly onXformSave: (xml: string) => void;
+  readonly onXformUpdate: (xml: string) => void;
 }
 
 const TABS: readonly { readonly id: DebugTab; readonly label: string }[] = [
-  { id: "variables", label: "Variables" },
-  { id: "calculations", label: "Calculations" },
-  { id: "question", label: "Inspector" },
+  { id: "inspector", label: "Inspector" },
+  { id: "values", label: "Values" },
   { id: "warnings", label: "Warnings" },
   { id: "external", label: "External" },
   { id: "source", label: "XLSForm" },
@@ -30,10 +31,13 @@ export function DebugPanel({
   formState,
   warnings,
   xformXml,
+  xlsformSheets,
   selectedQuestion,
   onQuestionSelect,
+  onXformSave,
+  onXformUpdate,
 }: DebugPanelProps) {
-  const [activeTab, setActiveTab] = useState<DebugTab>("variables");
+  const [activeTab, setActiveTab] = useState<DebugTab>("inspector");
 
   return (
     <div className="flex flex-col h-full bg-white text-gray-900 border-l border-gray-200">
@@ -42,7 +46,7 @@ export function DebugPanel({
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
           const count =
-            tab.id === "variables"
+            tab.id === "values"
               ? formState.variables.length
               : tab.id === "warnings"
               ? warnings.length
@@ -65,7 +69,7 @@ export function DebugPanel({
                   {count}
                 </span>
               )}
-              {tab.id === "question" && selectedQuestion && (
+              {tab.id === "inspector" && selectedQuestion && (
                 <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-mono">
                   {selectedQuestion}
                 </span>
@@ -77,18 +81,21 @@ export function DebugPanel({
 
       {/* Tab content */}
       <div className="flex-1 overflow-hidden">
-        {activeTab === "variables" && (
-          <VariableInspector variables={formState.variables} />
-        )}
-        {activeTab === "calculations" && (
-          <CalculationsPanel xformXml={xformXml} />
-        )}
-        {activeTab === "question" && (
-          <QuestionInspector
+        {activeTab === "inspector" && (
+          <FieldEditorInspector
+            xformXml={xformXml}
             selectedQuestion={selectedQuestion}
             onQuestionSelect={onQuestionSelect}
-            xformXml={xformXml}
+            onXformSave={onXformSave}
+            onXformUpdate={onXformUpdate}
             variables={formState.variables}
+          />
+        )}
+        {activeTab === "values" && (
+          <MergedValuesPanel
+            variables={formState.variables}
+            xformXml={xformXml}
+            onQuestionSelect={onQuestionSelect}
           />
         )}
         {activeTab === "warnings" && (
@@ -102,7 +109,7 @@ export function DebugPanel({
           <ExternalDataPanel xformXml={xformXml} />
         )}
         {activeTab === "source" && (
-          <XLSFormSource xformXml={xformXml} selectedQuestion={selectedQuestion} />
+          <XLSFormSource xlsformSheets={xlsformSheets} selectedQuestion={selectedQuestion} />
         )}
       </div>
     </div>

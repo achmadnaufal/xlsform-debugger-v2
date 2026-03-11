@@ -1,15 +1,17 @@
 import { useState, useCallback, useRef, type DragEvent } from "react";
 import axios from "axios";
-import type { ConvertResponse, ExternalDataEntry } from "../types";
+import type { ConvertResponse, ExternalDataEntry, XlsFormSheets } from "../types";
+import { useStatus } from "../contexts/StatusContext";
 
 const API_URL = "http://localhost:5050/convert";
 
 interface FileUploadBarProps {
-  readonly onConvert: (xformXml: string, warnings: readonly string[], externalData: readonly ExternalDataEntry[]) => void;
+  readonly onConvert: (xformXml: string, warnings: readonly string[], externalData: readonly ExternalDataEntry[], xlsformSheets: XlsFormSheets) => void;
   readonly onError: (error: string) => void;
 }
 
 export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
+  const { setStatus } = useStatus();
   const [loading, setLoading] = useState(false);
   const [xlsxFile, setXlsxFile] = useState<File | null>(null);
   const [csvFiles, setCsvFiles] = useState<File[]>([]);
@@ -20,6 +22,7 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
   const doConvert = useCallback(
     async (xlsx: File, csvs: File[]) => {
       setLoading(true);
+      setStatus("converting");
       try {
         const formData = new FormData();
         formData.append("xlsx_file", xlsx);
@@ -29,7 +32,7 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
           headers: { "Content-Type": "multipart/form-data" },
         });
 
-        onConvert(response.data.xform_xml, response.data.warnings, response.data.external_data ?? []);
+        onConvert(response.data.xform_xml, response.data.warnings, response.data.external_data ?? [], response.data.xlsform_sheets ?? {});
       } catch (err) {
         const message =
           axios.isAxiosError(err) && err.response?.data?.detail
@@ -40,6 +43,7 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
         onError(message);
       } finally {
         setLoading(false);
+        setStatus("idle");
       }
     },
     [onConvert, onError]
@@ -112,7 +116,7 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
   );
 
   return (
-    <div className="bg-white border-b border-gray-200 px-4 py-2 flex flex-col gap-1">
+    <div className="bg-white px-4 py-2 flex flex-col gap-1">
       <div className="flex items-center gap-3">
         {/* XLSX drop zone */}
         <div

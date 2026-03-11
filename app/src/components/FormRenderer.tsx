@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import { useEnketoForm } from "../hooks/useEnketoForm";
 import type { ExternalDataEntry, FormState } from "../types";
+import { useStatus } from "../contexts/StatusContext";
 
 interface FormRendererProps {
   readonly xformXml: string | null;
@@ -24,6 +25,7 @@ export function FormRenderer({
 }: FormRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [transformed, setTransformed] = useState<TransformOutput | null>(null);
+  const { setStatus } = useStatus();
 
   // Transform XForm XML using enketo-transformer (web build)
   useEffect(() => {
@@ -35,6 +37,7 @@ export function FormRenderer({
     let cancelled = false;
 
     async function doTransform() {
+      setStatus("rendering");
       try {
         const { transform } = await import("enketo-transformer/web");
         const result = await transform({ xform: xformXml! });
@@ -44,13 +47,14 @@ export function FormRenderer({
       } catch (err) {
         if (!cancelled) {
           onError(err instanceof Error ? err.message : "XForm transformation failed");
+          setStatus("idle");
         }
       }
     }
 
     doTransform();
     return () => { cancelled = true; };
-  }, [xformXml, onError]);
+  }, [xformXml, onError, setStatus]);
 
   const { formReady, formState, errors } = useEnketoForm({
     formHtml: transformed?.form ?? "",
@@ -63,8 +67,9 @@ export function FormRenderer({
   useEffect(() => {
     if (formReady) {
       onModelUpdate(formState);
+      setStatus("idle");
     }
-  }, [formReady, formState, onModelUpdate]);
+  }, [formReady, formState, onModelUpdate, setStatus]);
 
   // Report init errors
   useEffect(() => {

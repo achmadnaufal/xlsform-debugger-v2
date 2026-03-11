@@ -22,16 +22,51 @@ app = FastAPI(title="XLSForm Debugger v2 API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:5174"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 
 def _save_upload(upload: UploadFile, dest: Path) -> Path:
-    filepath = dest / upload.filename
+    safe_name = os.path.basename(upload.filename or "upload")
+    if not safe_name:
+        safe_name = "upload"
+    filepath = dest / safe_name
+    if not filepath.resolve().is_relative_to(dest.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid filename")
     with open(filepath, "wb") as f:
         f.write(upload.file.read())
     return filepath
+
+
+def _parse_xlsform_sheets(xlsform_path: Path) -> dict[str, list[dict[str, object]]]:
+    """Read raw sheet data from an XLSForm Excel file."""
+    import openpyxl
+
+    wb = openpyxl.load_workbook(str(xlsform_path), read_only=True, data_only=True)
+    sheets: dict[str, list[dict[str, object]]] = {}
+    for name in wb.sheetnames:
+        ws = wb[name]
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            sheets[name] = []
+            continue
+        headers = [str(h) if h is not None else "" for h in rows[0]]
+        sheet_rows: list[dict[str, object]] = []
+        for row in rows[1:]:
+            # Skip fully empty rows
+            if all(c is None or str(c).strip() == "" for c in row):
+                continue
+            record: dict[str, object] = {}
+            for i, header in enumerate(headers):
+                if not header:
+                    continue
+                val = row[i] if i < len(row) else None
+                record[header] = val if val is not None else ""
+            sheet_rows.append(record)
+        sheets[name] = sheet_rows
+    wb.close()
+    return sheets
 
 
 def _convert_xlsform(
@@ -130,6 +165,7 @@ async def convert(
                 external_data.append(_csv_to_xml(csv_content, csv_file.filename or "data.csv"))
 
         xform_xml, warnings, title, form_id = _convert_xlsform(xlsform_path, tmp_dir)
+        xlsform_sheets = _parse_xlsform_sheets(xlsform_path)
 
         return {
             "xform_xml": xform_xml,
@@ -137,11 +173,12 @@ async def convert(
             "title": title,
             "id": form_id,
             "external_data": external_data,
+            "xlsform_sheets": xlsform_sheets,
         }
     except pyxform.errors.PyXFormError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Internal error: {exc}")
+        raise HTTPException(status_code=500, detail="An internal error occurred")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -165,7 +202,7 @@ async def validate(
     except pyxform.errors.PyXFormError as exc:
         return {"valid": False, "errors": [str(exc)], "warnings": []}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Internal error: {exc}")
+        raise HTTPException(status_code=500, detail="An internal error occurred")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -176,41 +213,5 @@ async def health():
 
 
 
-from fastapi.responses import Response
-
-@app.get("/test-form-raw")
-async def test_form_raw():
-    xlsx_path = "/Users/achmadnaufal/projects/forms/china_stm/Draft_Regag_Garlic_UPDATED.xlsx"
-    with open(xlsx_path, "rb") as f:
-        data = f.read()
-    return Response(content=data, media_type="application/octet-stream", headers={
-        "Content-Disposition": "attachment; filename=Draft_Regag_Garlic_UPDATED.xlsx",
-        "Access-Control-Allow-Origin": "*"
-    })
-
-
-@app.get("/csv/{filename}")
-async def serve_csv(filename: str):
-    import os
-    csv_dir = "/Users/achmadnaufal/projects/forms/china_stm/pulldata/"
-    filepath = os.path.join(csv_dir, filename)
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="CSV not found")
-    with open(filepath, "rb") as f:
-        data = f.read()
-    return Response(content=data, media_type="text/csv", headers={"Access-Control-Allow-Origin": "*"})
-
 if __name__ == "__main__":
-
-    uvicorn.run(app, host="0.0.0.0", port=5050)
-
-
-
-from fastapi.responses import FileResponse, Response
-
-@app.get("/test-form-raw")
-async def test_form_raw():
-    xlsx_path = "/Users/achmadnaufal/projects/forms/china_stm/Draft_Regag_Garlic_UPDATED.xlsx"
-    with open(xlsx_path, "rb") as f:
-        data = f.read()
-    return Response(content=data, media_type="application/octet-stream", headers={"Content-Disposition": "attachment; filename=Draft_Regag_Garlic_UPDATED.xlsx", "Access-Control-Allow-Origin": "*"})
+    uvicorn.run(app, host="127.0.0.1", port=5050)
