@@ -1,16 +1,20 @@
-import { useState, useCallback, useRef, type DragEvent } from "react";
+import { useState, useCallback, useRef, useEffect, type DragEvent } from "react";
 import axios from "axios";
 import type { ConvertResponse, ExternalDataEntry, XlsFormSheets } from "../types";
+import { csvFileToXml } from "../utils/csvToXml";
 import { useStatus } from "../contexts/StatusContext";
 
-const API_URL = "http://localhost:5050/convert";
+const API_URL = `${import.meta.env.VITE_API_URL ?? "http://localhost:5050"}/convert`;
 
 interface FileUploadBarProps {
   readonly onConvert: (xformXml: string, warnings: readonly string[], externalData: readonly ExternalDataEntry[], xlsformSheets: XlsFormSheets) => void;
+  readonly onCsvUpdate?: (externalData: readonly ExternalDataEntry[]) => void;
+  readonly hasSourceXml?: boolean;
   readonly onError: (error: string) => void;
+  readonly resetKey?: number;
 }
 
-export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
+export function FileUploadBar({ onConvert, onCsvUpdate, hasSourceXml, onError, resetKey }: FileUploadBarProps) {
   const { setStatus } = useStatus();
   const [loading, setLoading] = useState(false);
   const [xlsxFile, setXlsxFile] = useState<File | null>(null);
@@ -18,6 +22,15 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
   const [dragOver, setDragOver] = useState(false);
   const xlsxInputRef = useRef<HTMLInputElement>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset file state when resetKey changes (new session)
+  useEffect(() => {
+    if (resetKey !== undefined) {
+      setXlsxFile(null);
+      setCsvFiles([]);
+      setLoading(false);
+    }
+  }, [resetKey]);
 
   const doConvert = useCallback(
     async (xlsx: File, csvs: File[]) => {
@@ -83,6 +96,19 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
     [handleXlsxFile]
   );
 
+  const parseCsvsClientSide = useCallback(
+    async (files: File[]) => {
+      if (!onCsvUpdate) return;
+      try {
+        const entries = await Promise.all(files.map(csvFileToXml));
+        onCsvUpdate(entries);
+      } catch (err) {
+        onError(err instanceof Error ? err.message : "Failed to parse CSV");
+      }
+    },
+    [onCsvUpdate, onError]
+  );
+
   const handleCsvSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!e.target.files) return;
@@ -95,24 +121,33 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
           if (idx >= 0) merged[idx] = f;
           else merged.push(f);
         }
-        // Re-convert if xlsx already loaded
-        if (xlsxFile) doConvert(xlsxFile, merged);
+        if (xlsxFile) {
+          // Full re-convert via API with xlsx + CSVs
+          doConvert(xlsxFile, merged);
+        } else if (hasSourceXml) {
+          // No xlsx file (restored session) — parse CSVs client-side
+          parseCsvsClientSide(merged);
+        }
         return merged;
       });
       e.target.value = "";
     },
-    [xlsxFile, doConvert]
+    [xlsxFile, hasSourceXml, doConvert, parseCsvsClientSide]
   );
 
   const handleRemoveCsv = useCallback(
     (name: string) => {
       setCsvFiles(prev => {
         const next = prev.filter(f => f.name !== name);
-        if (xlsxFile) doConvert(xlsxFile, next);
+        if (xlsxFile) {
+          doConvert(xlsxFile, next);
+        } else if (hasSourceXml) {
+          parseCsvsClientSide(next);
+        }
         return next;
       });
     },
-    [xlsxFile, doConvert]
+    [xlsxFile, hasSourceXml, doConvert, parseCsvsClientSide]
   );
 
   return (
@@ -120,13 +155,17 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
       <div className="flex items-center gap-3">
         {/* XLSX drop zone */}
         <div
-          className={`flex-1 border-2 border-dashed rounded-lg px-4 py-2 text-center cursor-pointer transition-colors ${
+          role="button"
+          tabIndex={0}
+          aria-label="Upload XLSForm file"
+          className={`flex-1 border-2 border-dashed rounded-lg px-4 py-2 text-center cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
             dragOver ? "border-blue-400 bg-blue-50" : "border-gray-300 hover:border-blue-400 hover:bg-gray-50"
           }`}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
           onClick={() => xlsxInputRef.current?.click()}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); xlsxInputRef.current?.click(); } }}
         >
           {loading ? (
             <div className="flex items-center justify-center gap-2 text-blue-600 text-sm">
@@ -149,7 +188,7 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
         {/* CSV button */}
         <button
           type="button"
-          className="text-sm px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors whitespace-nowrap border border-gray-200"
+          className="text-sm px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors whitespace-nowrap border border-gray-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
           onClick={() => csvInputRef.current?.click()}
         >
           + CSV files
@@ -165,7 +204,7 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
               {f.name}
               <button
                 type="button"
-                className="text-blue-400 hover:text-red-500 ml-0.5 leading-none"
+                className="text-blue-500 hover:text-red-600 ml-0.5 leading-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                 onClick={() => handleRemoveCsv(f.name)}
                 title="Remove"
               >

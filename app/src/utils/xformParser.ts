@@ -20,6 +20,10 @@ export interface FieldMeta {
   readonly choiceFilter: string;
   readonly listName: string;
   readonly defaultValue: string;
+  readonly repeatCount: string;
+  readonly parameters: string;
+  readonly trigger: string;
+  readonly mediaImages: LocalizedText;
 }
 
 /** Get first language value from LocalizedText, or empty string. */
@@ -31,6 +35,7 @@ export function getDefaultText(localized: LocalizedText): string {
 // --- itext parsing ---
 
 type ItextMap = Map<string, LocalizedText>;
+type ItextMediaMap = Map<string, LocalizedText>;
 
 function parseItextMap(doc: Document): ItextMap {
   const map: ItextMap = new Map();
@@ -41,13 +46,86 @@ function parseItextMap(doc: Document): ItextMap {
     for (const text of Array.from(texts)) {
       const id = text.getAttribute('id') ?? '';
       if (!id) continue;
-      const valueEl = text.querySelector('value');
+      // Only pick up the default (no form attr) or form="long" value element
+      const valueEl = text.querySelector('value:not([form])') ?? text.querySelector('value[form="long"]');
       const value = valueEl?.textContent?.trim() ?? '';
       const existing = map.get(id) ?? {};
       map.set(id, { ...existing, [lang]: value });
     }
   }
   return map;
+}
+
+/** Parse itext media images: <value form="image">jr://images/file.png</value> */
+function parseItextMediaImages(doc: Document): ItextMediaMap {
+  const map: ItextMediaMap = new Map();
+  const translations = doc.querySelectorAll('itext translation');
+  for (const translation of Array.from(translations)) {
+    const lang = translation.getAttribute('lang') ?? 'default';
+    const texts = translation.querySelectorAll('text');
+    for (const text of Array.from(texts)) {
+      const id = text.getAttribute('id') ?? '';
+      if (!id) continue;
+      const imageEl = text.querySelector('value[form="image"]');
+      if (!imageEl) continue;
+      const value = imageEl.textContent?.trim() ?? '';
+      if (!value) continue;
+      const existing = map.get(id) ?? {};
+      map.set(id, { ...existing, [lang]: value });
+    }
+  }
+  return map;
+}
+
+/** Parse <setvalue> elements from the model, indexed by target ref. */
+function parseSetValues(doc: Document): Map<string, string> {
+  const map = new Map<string, string>();
+  const setvalues = doc.querySelectorAll('setvalue');
+  for (const sv of Array.from(setvalues)) {
+    const ref = sv.getAttribute('ref') ?? sv.getAttribute('event') ?? '';
+    const event = sv.getAttribute('event') ?? '';
+    const value = sv.getAttribute('value') ?? sv.textContent?.trim() ?? '';
+    if (!ref) continue;
+    const name = ref.split('/').pop() ?? '';
+    if (!name) continue;
+    const display = event ? `${event}: ${value}` : value;
+    map.set(name, display);
+  }
+  return map;
+}
+
+/** Parse repeat jr:count attributes from body <repeat> elements. */
+function parseRepeatCounts(doc: Document): Map<string, string> {
+  const map = new Map<string, string>();
+  const repeats = doc.querySelectorAll('repeat');
+  for (const repeat of Array.from(repeats)) {
+    const ref = repeat.getAttribute('nodeset') ?? repeat.getAttribute('ref') ?? '';
+    const name = ref.split('/').pop() ?? '';
+    const jrCount = repeat.getAttributeNS('http://openrosa.org/javarosa', 'count')
+      ?? repeat.getAttribute('jr:count') ?? '';
+    if (name && jrCount) {
+      map.set(name, jrCount);
+    }
+  }
+  return map;
+}
+
+/** Extract non-standard body element attributes as a parameters string. */
+function getParameters(el: Element): string {
+  const skipAttrs = new Set(['ref', 'nodeset', 'appearance', 'mediatype', 'class', 'intent']);
+  const params: string[] = [];
+  for (const attr of Array.from(el.attributes)) {
+    // Skip standard attributes and namespace declarations
+    if (skipAttrs.has(attr.name) || attr.name.startsWith('xmlns')) continue;
+    // Include things like max-pixels, accuracy, etc.
+    if (attr.name.includes(':') && !attr.name.startsWith('odk:')) continue;
+    if (attr.name === 'max-pixels' || attr.name === 'orx:max-pixels'
+      || attr.name.startsWith('odk:') || attr.name === 'rows'
+      || attr.name === 'accuracy' || attr.name === 'unacceptedAccuracy') {
+      params.push(`${attr.name}=${attr.value}`);
+    }
+  }
+  return params.join(' ');
 }
 
 /** Extract available form languages from XForm XML. */
@@ -151,6 +229,9 @@ export function parseXFormFields(xmlString: string): Map<string, FieldMeta> {
   const doc = new DOMParser().parseFromString(xmlString, 'application/xml');
   const fields = new Map<string, FieldMeta>();
   const itextMap = parseItextMap(doc);
+  const mediaImageMap = parseItextMediaImages(doc);
+  const setValueMap = parseSetValues(doc);
+  const repeatCountMap = parseRepeatCounts(doc);
 
   const bindMap = new Map<string, Partial<FieldMeta> & { constraintMsg?: string; nodeset?: string }>();
   doc.querySelectorAll('bind').forEach((bind) => {
@@ -159,6 +240,11 @@ export function parseXFormFields(xmlString: string): Map<string, FieldMeta> {
     if (!name) return;
     const constraintMsg = bind.getAttributeNS('http://openrosa.org/javarosa', 'constraintMsg')
       ?? bind.getAttribute('jr:constraintMsg') ?? '';
+    // Check both standard calculate and odk:calculate namespace variant
+    const calculation = bind.getAttribute('calculate')
+      ?? bind.getAttributeNS('http://www.opendatakit.org/xforms', 'calculate')
+      ?? bind.getAttribute('odk:calculate')
+      ?? '';
     bindMap.set(name, {
       name,
       xpath: nodeset,
@@ -166,20 +252,27 @@ export function parseXFormFields(xmlString: string): Map<string, FieldMeta> {
       readonly: bind.getAttribute('readonly') ?? '',
       relevant: bind.getAttribute('relevant') ?? '',
       constraint: bind.getAttribute('constraint') ?? '',
-      calculation: bind.getAttribute('calculate') ?? '',
+      calculation,
       required: bind.getAttribute('required') ?? '',
       constraintMsg,
       nodeset,
     });
   });
 
-  const bodyElements = doc.querySelectorAll('group, input, select, select1, trigger, range, upload, rank');
+  /** Get media images for a field from itext. */
+  function getMediaImages(nodeset: string): LocalizedText {
+    const labelId = `${nodeset}:label`;
+    return mediaImageMap.get(labelId) ?? {};
+  }
+
+  const bodyElements = doc.querySelectorAll('group, repeat, input, select, select1, trigger, range, upload, rank');
   bodyElements.forEach((el) => {
-    const ref = el.getAttribute('ref') ?? '';
+    const ref = el.getAttribute('ref') ?? el.getAttribute('nodeset') ?? '';
     const name = ref.split('/').pop() ?? '';
     if (!name) return;
 
     const bind = bindMap.get(name) ?? { name, xpath: ref };
+    const nodeset = bind.nodeset ?? bind.xpath ?? ref;
     fields.set(name, {
       name,
       xpath: bind.xpath ?? ref,
@@ -190,7 +283,7 @@ export function parseXFormFields(xmlString: string): Map<string, FieldMeta> {
       labels: getLocalizedLabels(el, itextMap),
       hints: getLocalizedHints(el, itextMap),
       constraintMessages: getLocalizedConstraintMessages(
-        bind.nodeset ?? bind.xpath ?? ref,
+        nodeset,
         itextMap,
         (bind as { constraintMsg?: string }).constraintMsg ?? '',
       ),
@@ -202,13 +295,16 @@ export function parseXFormFields(xmlString: string): Map<string, FieldMeta> {
       choiceFilter: getChoiceFilter(el),
       listName: getListName(el),
       defaultValue: getDefaultValue(doc, name),
+      repeatCount: repeatCountMap.get(name) ?? '',
+      parameters: getParameters(el),
+      trigger: setValueMap.get(name) ?? '',
+      mediaImages: getMediaImages(nodeset),
     });
   });
 
   // Add bind-only fields not in body (calculate, meta, hidden, etc.)
   bindMap.forEach((bind, name) => {
     if (!fields.has(name)) {
-      // Try to find labels/hints from itext by convention ({nodeset}:label, {nodeset}:hint)
       const nodeset = bind.nodeset ?? bind.xpath ?? '';
       const itextLabels = itextMap.get(`${nodeset}:label`) ?? {};
       const itextHints = itextMap.get(`${nodeset}:hint`) ?? {};
@@ -222,7 +318,7 @@ export function parseXFormFields(xmlString: string): Map<string, FieldMeta> {
         labels: itextLabels,
         hints: itextHints,
         constraintMessages: getLocalizedConstraintMessages(
-          bind.nodeset ?? bind.xpath ?? '',
+          nodeset,
           itextMap,
           (bind as { constraintMsg?: string }).constraintMsg ?? '',
         ),
@@ -234,6 +330,10 @@ export function parseXFormFields(xmlString: string): Map<string, FieldMeta> {
         choiceFilter: '',
         listName: '',
         defaultValue: getDefaultValue(doc, name),
+        repeatCount: '',
+        parameters: '',
+        trigger: setValueMap.get(name) ?? '',
+        mediaImages: getMediaImages(nodeset),
       });
     }
   });

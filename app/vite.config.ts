@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
-export default defineConfig({
+export default defineConfig(({ mode: _mode }) => ({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
@@ -82,4 +82,9 @@ export default defineConfig({
     exclude: ["enketo-transformer/web"],
     include: ["enketo-core"],
   },
-});
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/utils/__tests__/setup.ts"],
+    globals: true,
+  },
+}));

@@ -1,4 +1,4 @@
-fastapi
-uvicorn
-python-multipart
-pyxform
+fastapi>=0.115.0,<1.0
+uvicorn>=0.34.0,<1.0
+python-multipart>=0.0.20,<1.0
+pyxform>=2.2.0,<3.0

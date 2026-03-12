@@ -19,6 +19,8 @@ export interface FieldEdit {
   readonly appearance?: string;
   readonly choiceFilter?: string;
   readonly defaultValue?: string;
+  readonly repeatCount?: string;
+  readonly parameters?: string;
 }
 
 /** Maps field names to their pending edits */
@@ -49,4 +51,7 @@ export type EditableProperty =
   | "required"
   | "appearance"
   | "choiceFilter"
-  | "defaultValue";
+  | "defaultValue"
+  | "repeatCount"
+  | "parameters"
+  | "readonly";

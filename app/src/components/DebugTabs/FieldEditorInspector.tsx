@@ -4,6 +4,7 @@ import type { FieldEdit, SheetsUpdatePayload } from "../../types/editor";
 import type { FieldMeta, LocalizedText } from "../../utils/xformParser";
 import { parseXFormFields, extractVarRefs, getDefaultText, parseFormLanguages } from "../../utils/xformParser";
 import { applyEditsToXform } from "../../utils/xformMutator";
+import { buildDependencyGraph, detectCycles, getFieldsInCycles } from "../../utils/dependencyGraph";
 import { evaluateRelevant, evaluateConstraint } from "../../utils/expressionEvaluator";
 import {
   EditableFormula,
@@ -71,11 +72,24 @@ function parseChoicesForField(xformXml: string, field: FieldMeta): Choice[] {
 // --- Field finder ---
 
 function findField(fields: Map<string, FieldMeta>, name: string): FieldMeta | undefined {
+  // Direct key match
   if (fields.has(name)) return fields.get(name);
+
+  // Last segment match (e.g. "field" from "/data/group/field")
   const last = name.split("/").pop() ?? "";
-  if (fields.has(last)) return fields.get(last);
+  if (last && fields.has(last)) return fields.get(last);
+
+  // Strip repeat indices (e.g. "/data/repeat[1]/field" → "/data/repeat/field")
+  const cleaned = name.replace(/\[\d+\]/g, "");
+  const cleanedLast = cleaned.split("/").pop() ?? "";
+  if (cleanedLast && cleanedLast !== last && fields.has(cleanedLast)) return fields.get(cleanedLast);
+
+  // Suffix matching: check if any field key or xpath ends with the name
   for (const [key, val] of fields) {
-    if (key.endsWith("/" + last) || val.xpath?.endsWith("/" + name)) return val;
+    if (key.endsWith("/" + last) || val.xpath?.endsWith("/" + last)) return val;
+    // Full xpath match (with or without repeat indices)
+    if (cleaned && (val.xpath === cleaned || val.xpath === name)) return val;
+    if (val.xpath?.endsWith("/" + cleanedLast)) return val;
   }
   return undefined;
 }
@@ -322,6 +336,20 @@ export function FieldEditorInspector({
     return result;
   }, [field, fields]);
 
+  // Circular dependency detection
+  const { fieldCycles, fieldsInCycles } = useMemo(() => {
+    if (!fields || fields.size === 0) return { fieldCycles: [], fieldsInCycles: new Set<string>() };
+    const graph = buildDependencyGraph(fields);
+    const cycles = detectCycles(graph);
+    return { fieldCycles: cycles, fieldsInCycles: getFieldsInCycles(cycles) };
+  }, [fields]);
+
+  const fieldIsInCycle = field ? fieldsInCycles.has(field.name) : false;
+  const fieldCycleInfo = useMemo(() => {
+    if (!field || !fieldIsInCycle) return null;
+    return fieldCycles.find((c) => c.path.includes(field.name)) ?? null;
+  }, [field, fieldIsInCycle, fieldCycles]);
+
   const isSelectType = field
     ? field.type.startsWith("select_one") ||
       field.type.startsWith("select_multiple") ||
@@ -444,6 +472,13 @@ export function FieldEditorInspector({
               onChange={(v) => handleEditLocalized("constraintMessages", editLang, v)}
             />
           </FieldRow>
+          {Object.keys(field.mediaImages).length > 0 && (
+            <FieldRow label="media::image">
+              <div className="font-mono text-xs px-2 py-1.5 rounded bg-gray-100 text-gray-600 border border-gray-200 break-all">
+                {field.mediaImages[editLang] ?? Object.values(field.mediaImages)[0] ?? ""}
+              </div>
+            </FieldRow>
+          )}
         </Section>
 
         {/* Properties */}
@@ -482,12 +517,38 @@ export function FieldEditorInspector({
               onChange={(v) => handleEditString("appearance", v)}
             />
           </FieldRow>
+          <FieldRow label="Read Only">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleEditString("readonly", getEffective(field, edits, "readonly") === "true()" ? "" : "true()")}
+                className={`w-8 h-4 rounded-full transition-colors ${
+                  getEffective(field, edits, "readonly") === "true()" ? "bg-blue-600" : "bg-gray-300"
+                }`}
+              >
+                <span className={`block w-3.5 h-3.5 rounded-full bg-white shadow transition-transform ${
+                  getEffective(field, edits, "readonly") === "true()" ? "translate-x-4" : "translate-x-0.5"
+                }`} />
+              </button>
+              <span className="text-xs text-gray-500">
+                {getEffective(field, edits, "readonly") === "true()" ? "Yes" : "No"}
+              </span>
+            </div>
+          </FieldRow>
           <FieldRow label="Default">
             <EditableTextField
               value={getEffective(field, edits, "defaultValue")}
               onChange={(v) => handleEditString("defaultValue", v)}
             />
           </FieldRow>
+          {field.parameters && (
+            <FieldRow label="Parameters">
+              <EditableTextField
+                value={getEffective(field, edits, "parameters")}
+                onChange={(v) => handleEditString("parameters", v)}
+              />
+            </FieldRow>
+          )}
         </Section>
 
         {/* Expressions */}
@@ -526,13 +587,27 @@ export function FieldEditorInspector({
               onChange={(v) => handleEditString("calculation", v)}
             />
           </FieldRow>
-          {isSelectType && (
-            <FieldRow label="Choice Filter">
+          <FieldRow label="Choice Filter">
+            <EditableFormula
+              value={effectiveChoiceFilter}
+              status={getFormulaStatus(effectiveChoiceFilter, formValues)}
+              onChange={(v) => handleEditString("choiceFilter", v)}
+            />
+          </FieldRow>
+          {field.repeatCount && (
+            <FieldRow label="Repeat Count">
               <EditableFormula
-                value={effectiveChoiceFilter}
-                status={getFormulaStatus(effectiveChoiceFilter, formValues)}
-                onChange={(v) => handleEditString("choiceFilter", v)}
+                value={getEffective(field, edits, "repeatCount")}
+                status={getFormulaStatus(getEffective(field, edits, "repeatCount"), formValues)}
+                onChange={(v) => handleEditString("repeatCount", v)}
               />
+            </FieldRow>
+          )}
+          {field.trigger && (
+            <FieldRow label="Trigger (setvalue)">
+              <div className="font-mono text-xs px-2 py-1.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
+                {field.trigger}
+              </div>
             </FieldRow>
           )}
         </Section>
@@ -563,6 +638,21 @@ export function FieldEditorInspector({
           </Section>
         )}
 
+        {/* Circular Dependency Warning */}
+        {fieldIsInCycle && fieldCycleInfo && (
+          <div className="bg-red-50 border border-red-200 rounded p-3">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-red-600 mb-1">
+              Circular Dependency Detected
+            </div>
+            <div className="text-xs text-red-700 mb-1">
+              This field is part of a dependency cycle, which may cause issues like unresponsive controls.
+            </div>
+            <div className="font-mono text-xs text-red-600 bg-red-100 rounded px-2 py-1">
+              {fieldCycleInfo.path.join(" -> ")}
+            </div>
+          </div>
+        )}
+
         {/* Dependencies */}
         {deps.length > 0 && (
           <Section title={`Depends On (${deps.length})`}>
@@ -571,7 +661,11 @@ export function FieldEditorInspector({
                 <button
                   key={dep}
                   onClick={() => handleQuestionSelect(dep)}
-                  className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-blue-600 text-xs font-mono rounded transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                  className={`px-2 py-0.5 text-xs font-mono rounded transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+                    fieldsInCycles.has(dep)
+                      ? "bg-red-100 hover:bg-red-200 text-red-600"
+                      : "bg-gray-100 hover:bg-gray-200 text-blue-600"
+                  }`}
                 >
                   {dep}
                 </button>

@@ -80,6 +80,10 @@ export function applyEditsToSheets(
     patches["required"] = edits.required === "true()" ? "yes" : edits.required;
   }
 
+  // --- New fields ---
+  if (edits.repeatCount !== undefined) patches["repeat_count"] = edits.repeatCount;
+  if (edits.parameters !== undefined) patches["parameters"] = edits.parameters;
+
   if (Object.keys(patches).length === 0) return sheets;
 
   const newRow: Record<string, unknown> = { ...originalRow, ...patches };

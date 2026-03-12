@@ -27,10 +27,21 @@ export function FormRenderer({
   const [transformed, setTransformed] = useState<TransformOutput | null>(null);
   const { setStatus } = useStatus();
 
+  // Clear transformed state immediately when xformXml becomes null
+  // (useEffect would be too late — stale formHtml would reach useEnketoForm)
+  const prevXmlRef = useRef(xformXml);
+  if (prevXmlRef.current !== xformXml) {
+    prevXmlRef.current = xformXml;
+    if (!xformXml) {
+      setTransformed(null);
+    }
+  }
+
   // Transform XForm XML using enketo-transformer (web build)
   useEffect(() => {
     if (!xformXml) {
-      setTransformed(null);
+      // Clear container DOM so no residual form is shown
+      if (containerRef.current) containerRef.current.innerHTML = "";
       return;
     }
 
@@ -85,10 +96,40 @@ export function FormRenderer({
     const handler = (e: MouseEvent) => {
       const question = (e.target as Element).closest('.question');
       if (!question) return;
+
+      // Strategy 1: input/select/textarea name attribute
       const input = question.querySelector('input, select, textarea');
-      const fullPath = input?.getAttribute('name') || question.getAttribute('data-name') || '';
-      const name = fullPath.split('/').pop() || '';
-      if (name) onQuestionSelect(name);
+      const inputName = input?.getAttribute('name') ?? '';
+      // Strategy 2: data-name attribute on the question element
+      const dataName = question.getAttribute('data-name') ?? '';
+
+      // Try extracting a clean field name from multiple sources
+      const candidates: string[] = [];
+
+      // From input name — strip repeat indices like [1], then take last segment
+      if (inputName) {
+        const cleaned = inputName.replace(/\[\d+\]/g, '');
+        const last = cleaned.split('/').pop() ?? '';
+        if (last) candidates.push(last);
+        // Also try full xpath for lookup (without repeat indices)
+        if (cleaned.includes('/')) candidates.push(cleaned);
+      }
+
+      // From data-name — same treatment
+      if (dataName) {
+        const cleaned = dataName.replace(/\[\d+\]/g, '');
+        const last = cleaned.split('/').pop() ?? '';
+        if (last && !candidates.includes(last)) candidates.push(last);
+        if (cleaned.includes('/') && !candidates.includes(cleaned)) candidates.push(cleaned);
+      }
+
+      // Try the first candidate that exists
+      for (const name of candidates) {
+        if (name) {
+          onQuestionSelect(name);
+          return;
+        }
+      }
     };
     container.addEventListener('click', handler);
     return () => container.removeEventListener('click', handler);

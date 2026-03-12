@@ -116,7 +116,9 @@ function buildTree(xmlString: string): TreeNode[] {
     if (!name) return;
     bindMap.set(name, bind.getAttribute("type") ?? "");
     bindNodesets.set(name, nodeset);
-    bindHasCalc.set(name, !!bind.getAttribute("calculate"));
+    bindHasCalc.set(name, !!(bind.getAttribute("calculate")
+      || bind.getAttributeNS("http://www.opendatakit.org/xforms", "calculate")
+      || bind.getAttribute("odk:calculate")));
   });
   // Build itext lookup for hidden field labels
   const itextLabels = new Map<string, string>();
@@ -203,7 +205,7 @@ function TreeNodeItem({
       ? "bg-green-500"
       : status === "hidden"
       ? "bg-orange-400"
-      : "bg-gray-300";
+      : "bg-gray-400";
 
   const handleClick = () => {
     if (isGroup) {
@@ -222,11 +224,16 @@ function TreeNodeItem({
   };
 
   return (
-    <div>
+    <div role={isGroup ? "group" : undefined}>
       <div
+        role="treeitem"
+        tabIndex={0}
+        aria-selected={isSelected}
+        aria-expanded={isGroup ? expanded : undefined}
         onClick={handleClick}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(); } }}
         title={node.name}
-        className={`flex items-center gap-1 px-2 py-0.5 cursor-pointer rounded text-xs select-none transition-colors ${
+        className={`flex items-center gap-1 px-2 py-0.5 cursor-pointer rounded text-xs select-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
           isSelected
             ? "bg-blue-100 text-blue-700"
             : isGroup
@@ -282,7 +289,7 @@ export function QuestionTree({ xformXml, selectedQuestion, onSelect }: QuestionT
         <span className="text-xs font-medium text-gray-700">Form Structure</span>
       </div>
       {/* Tree */}
-      <div className="overflow-auto flex-1 py-1">
+      <div className="overflow-auto flex-1 py-1" role="tree">
         {!xformXml ? (
           <div className="px-3 py-2 text-xs text-gray-400">No form loaded</div>
         ) : tree.length === 0 ? (

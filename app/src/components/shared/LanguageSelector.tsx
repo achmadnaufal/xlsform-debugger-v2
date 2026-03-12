@@ -14,10 +14,10 @@ export function LanguageSelector({ languages, active, onChange }: LanguageSelect
           key={lang}
           type="button"
           onClick={() => onChange(lang)}
-          className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+          className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
             active === lang
               ? "bg-blue-600 text-white"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
           }`}
         >
           {lang}

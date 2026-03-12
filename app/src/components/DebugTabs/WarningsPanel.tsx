@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { parseXFormFields, extractVarRefs, extractPulldataFiles } from "../../utils/xformParser";
+import { buildDependencyGraph, detectCycles } from "../../utils/dependencyGraph";
 import type { FormVariable } from "../../types";
 
 interface WarningsPanelProps {
@@ -9,7 +10,7 @@ interface WarningsPanelProps {
 }
 
 interface Warning {
-  readonly type: "conversion" | "undefined-ref" | "missing-csv" | "malformed";
+  readonly type: "conversion" | "undefined-ref" | "missing-csv" | "malformed" | "circular-dep";
   readonly message: string;
 }
 
@@ -60,6 +61,16 @@ export function WarningsPanel({ warnings, xformXml, variables }: WarningsPanelPr
         }
       }
 
+      // Circular dependency detection
+      const graph = buildDependencyGraph(fields);
+      const cycles = detectCycles(graph);
+      for (const cycle of cycles) {
+        result.push({
+          type: "circular-dep",
+          message: `Circular dependency: ${cycle.path.join(" → ")}`,
+        });
+      }
+
       const pulldataFiles = extractPulldataFiles(xformXml);
       const loadedIds = new Set((window.__externalData ?? []).map((d) => d.id));
       for (const file of pulldataFiles) {
@@ -90,6 +101,7 @@ export function WarningsPanel({ warnings, xformXml, variables }: WarningsPanelPr
     "undefined-ref": "🔴",
     "missing-csv": "📄",
     malformed: "🔧",
+    "circular-dep": "🔄",
   };
 
   return (
@@ -100,6 +112,8 @@ export function WarningsPanel({ warnings, xformXml, variables }: WarningsPanelPr
           className={`flex gap-2 rounded px-3 py-2 text-xs border ${
             w.type === "undefined-ref" || w.type === "missing-csv"
               ? "bg-red-100 border-red-200"
+              : w.type === "circular-dep"
+              ? "bg-red-100 border-red-200"
               : w.type === "malformed"
               ? "bg-orange-100 border-orange-200"
               : "bg-yellow-100 border-yellow-200"
@@ -107,7 +121,7 @@ export function WarningsPanel({ warnings, xformXml, variables }: WarningsPanelPr
         >
           <span className="shrink-0">{iconMap[w.type]}</span>
           <span className={`${
-            w.type === "undefined-ref" || w.type === "missing-csv"
+            w.type === "undefined-ref" || w.type === "missing-csv" || w.type === "circular-dep"
               ? "text-red-700"
               : w.type === "malformed"
               ? "text-orange-700"

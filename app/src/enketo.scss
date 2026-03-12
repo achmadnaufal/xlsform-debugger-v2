@@ -1,2 +1,4 @@
-/* enketo-core grid theme — includes all core styles with proper mixin ordering */
-@import "enketo-core/src/sass/grid/grid.scss";
+/* enketo-core grid theme — scoped to prevent global button/style overrides */
+.enketo-form-container {
+  @import "enketo-core/src/sass/grid/grid.scss";
+}

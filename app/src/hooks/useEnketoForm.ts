@@ -122,7 +122,17 @@ export function useEnketoForm({
   }, [updateFormState]);
 
   useEffect(() => {
-    if (!formHtml || !modelXml || !containerRef.current) return;
+    if (!formHtml || !modelXml || !containerRef.current) {
+      // Inputs cleared — destroy any existing form and reset state
+      if (formInstanceRef.current) {
+        try { formInstanceRef.current.destroy(); } catch { /* ignore */ }
+        formInstanceRef.current = null;
+      }
+      setFormReady(false);
+      setFormState(EMPTY_STATE);
+      setErrors([]);
+      return;
+    }
 
     let destroyed = false;
 
@@ -152,16 +162,16 @@ export function useEnketoForm({
       }
 
       try {
-        console.log("[useEnketoForm] Creating Form instance...");
-        console.log("[useEnketoForm] modelXml length:", modelXml.length);
+        if (import.meta.env.DEV) console.log("[useEnketoForm] Creating Form instance...");
+        if (import.meta.env.DEV) console.log("[useEnketoForm] modelXml length:", modelXml.length);
 
         const external = externalData.map(({ id, xml }) => {
           const parser = new DOMParser();
           const doc = parser.parseFromString(xml, "text/xml");
           const rootEl = doc.documentElement;
           const parseErr = rootEl?.querySelector?.("parsererror");
-          if (parseErr) console.error("[useEnketoForm] XML parse error for", id, parseErr.textContent?.slice(0,100));
-          else console.log("[useEnketoForm] external", id, "items:", rootEl?.querySelectorAll?.("item")?.length ?? 0);
+          if (parseErr && import.meta.env.DEV) console.error("[useEnketoForm] XML parse error for", id, parseErr.textContent?.slice(0,100));
+          else if (import.meta.env.DEV) console.log("[useEnketoForm] external", id, "items:", rootEl?.querySelectorAll?.("item")?.length ?? 0);
           return { id, xml: doc };
         });
 
@@ -170,12 +180,12 @@ export function useEnketoForm({
           external,
         });
 
-        console.log("[useEnketoForm] Form created, calling init()...");
+        if (import.meta.env.DEV) console.log("[useEnketoForm] Form created, calling init()...");
         const initErrors = form.init();
-        console.log("[useEnketoForm] init() completed, errors:", initErrors);
+        if (import.meta.env.DEV) console.log("[useEnketoForm] init() completed, errors:", initErrors);
 
         formInstanceRef.current = form;
-        (window as any).__enketoForm = form;
+        if (import.meta.env.DEV) (window as any).__enketoForm = form;
 
         if (destroyed) {
           form.destroy();
@@ -218,6 +228,10 @@ export function useEnketoForm({
           // ignore
         }
         formInstanceRef.current = null;
+      }
+      // Clear container DOM to prevent stale form content on re-render
+      if (containerRef.current) {
+        containerRef.current.innerHTML = "";
       }
       setFormReady(false);
     };

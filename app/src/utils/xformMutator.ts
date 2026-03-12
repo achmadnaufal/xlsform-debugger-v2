@@ -21,11 +21,11 @@ function findBindByName(doc: Document, fieldName: string): Element | null {
 }
 
 function findBodyElementByName(doc: Document, fieldName: string): Element | null {
-  const selectors = ["input", "select", "select1", "trigger", "range", "upload", "group", "rank"];
+  const selectors = ["input", "select", "select1", "trigger", "range", "upload", "group", "repeat", "rank"];
   for (const tag of selectors) {
     const elements = doc.querySelectorAll(tag);
     for (const el of Array.from(elements)) {
-      const ref = el.getAttribute("ref") ?? "";
+      const ref = el.getAttribute("ref") ?? el.getAttribute("nodeset") ?? "";
       if (ref.endsWith(`/${fieldName}`)) return el;
     }
   }
@@ -78,9 +78,9 @@ function setItextValue(doc: Document, itextId: string, lang: string, value: stri
       }
     }
     // Text entry doesn't exist yet — create it
-    const textEl = doc.createElement("text");
+    const textEl = doc.createElementNS(XFORMS_NS, "text");
     textEl.setAttribute("id", itextId);
-    const valueEl = doc.createElement("value");
+    const valueEl = doc.createElementNS(XFORMS_NS, "value");
     valueEl.textContent = value;
     textEl.appendChild(valueEl);
     translation.appendChild(textEl);
@@ -123,7 +123,7 @@ function setLocalizedText(
       return;
     }
     if (!child) {
-      child = doc.createElement(childTag);
+      child = doc.createElementNS(XFORMS_NS, childTag);
       bodyEl.insertBefore(child, bodyEl.firstChild);
     }
     child.textContent = text;
@@ -243,13 +243,13 @@ function addItextRefs(doc: Document, bodyEl: Element, nodeset: string): void {
   }
 
   if (hasLabel) {
-    const label = doc.createElement("label");
+    const label = doc.createElementNS(XFORMS_NS, "label");
     label.setAttribute("ref", `jr:itext('${labelId}')`);
     bodyEl.insertBefore(label, bodyEl.firstChild);
   }
 
   if (hasHint) {
-    const hint = doc.createElement("hint");
+    const hint = doc.createElementNS(XFORMS_NS, "hint");
     hint.setAttribute("ref", `jr:itext('${hintId}')`);
     bodyEl.appendChild(hint);
   }
@@ -304,6 +304,16 @@ function applyFieldEdits(doc: Document, fieldName: string, edits: FieldEdit): vo
           newEl.setAttribute("ref", xpath);
           // Add itext label/hint refs if they exist
           addItextRefs(doc, newEl, xpath);
+          // If no itext label was added (e.g. hidden fields without itext),
+          // create a label so enketo renders the field properly
+          if (!newEl.querySelector("label")) {
+            const label = doc.createElementNS(XFORMS_NS, "label");
+            // If edits include labels, use the default text
+            if (edits.labels) {
+              label.textContent = getDefaultText(edits.labels);
+            }
+            newEl.insertBefore(label, newEl.firstChild);
+          }
           // Insert at correct position based on bind order
           const container = findParentContainer(doc, body, xpath);
           const insertRef = findInsertionRef(doc, container, fieldName);
@@ -338,6 +348,26 @@ function applyFieldEdits(doc: Document, fieldName: string, edits: FieldEdit): vo
           ? `${baseNodeset}[${edits.choiceFilter}]`
           : baseNodeset;
         itemset.setAttribute("nodeset", newNodeset);
+      }
+    }
+
+    // Handle repeatCount: set jr:count on repeat elements
+    if (edits.repeatCount !== undefined && bodyEl.tagName.toLowerCase() === "repeat") {
+      if (edits.repeatCount) {
+        bodyEl.setAttributeNS(JR_NS, "jr:count", edits.repeatCount);
+      } else {
+        bodyEl.removeAttributeNS(JR_NS, "count");
+      }
+    }
+
+    // Handle parameters: set specific body element attributes
+    if (edits.parameters !== undefined) {
+      const paramPairs = edits.parameters.split(/\s+/).filter(Boolean);
+      for (const pair of paramPairs) {
+        const [key, val] = pair.split("=");
+        if (key && val !== undefined) {
+          bodyEl.setAttribute(key, val);
+        }
       }
     }
   }
