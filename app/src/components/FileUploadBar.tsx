@@ -11,23 +11,19 @@ interface FileUploadBarProps {
 
 export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
   const [loading, setLoading] = useState(false);
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [xlsxFile, setXlsxFile] = useState<File | null>(null);
+  const [csvFiles, setCsvFiles] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const xlsxInputRef = useRef<HTMLInputElement>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
-  const csvFilesRef = useRef<File[]>([]);
 
-  const handleUpload = useCallback(
-    async (xlsxFile: File) => {
+  const doConvert = useCallback(
+    async (xlsx: File, csvs: File[]) => {
       setLoading(true);
-      setFileName(xlsxFile.name);
-
       try {
         const formData = new FormData();
-        formData.append("xlsx_file", xlsxFile);
-        csvFilesRef.current.forEach((csv) => {
-          formData.append("csv_files", csv);
-        });
+        formData.append("xlsx_file", xlsx);
+        csvs.forEach((csv) => formData.append("csv_files", csv));
 
         const response = await axios.post<ConvertResponse>(API_URL, formData, {
           headers: { "Content-Type": "multipart/form-data" },
@@ -49,112 +45,131 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
     [onConvert, onError]
   );
 
+  const handleXlsxFile = useCallback(
+    (file: File) => {
+      setXlsxFile(file);
+      setCsvFiles(prev => {
+        doConvert(file, prev);
+        return prev;
+      });
+    },
+    [doConvert]
+  );
+
   const handleDrop = useCallback(
     (e: DragEvent<HTMLDivElement>) => {
       e.preventDefault();
       setDragOver(false);
       const file = e.dataTransfer.files[0];
       if (file?.name.endsWith(".xlsx")) {
-        handleUpload(file);
+        handleXlsxFile(file);
       } else {
         onError("Please drop an .xlsx file");
       }
     },
-    [handleUpload, onError]
+    [handleXlsxFile, onError]
   );
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (file) handleUpload(file);
+      if (file) handleXlsxFile(file);
+      e.target.value = "";
     },
-    [handleUpload]
+    [handleXlsxFile]
   );
 
   const handleCsvSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files) {
-        csvFilesRef.current = Array.from(e.target.files);
-      }
+      if (!e.target.files) return;
+      const newCsvs = Array.from(e.target.files);
+      setCsvFiles(prev => {
+        // Merge: replace files with same name, add new ones
+        const merged = [...prev];
+        for (const f of newCsvs) {
+          const idx = merged.findIndex(x => x.name === f.name);
+          if (idx >= 0) merged[idx] = f;
+          else merged.push(f);
+        }
+        // Re-convert if xlsx already loaded
+        if (xlsxFile) doConvert(xlsxFile, merged);
+        return merged;
+      });
+      e.target.value = "";
     },
-    []
+    [xlsxFile, doConvert]
+  );
+
+  const handleRemoveCsv = useCallback(
+    (name: string) => {
+      setCsvFiles(prev => {
+        const next = prev.filter(f => f.name !== name);
+        if (xlsxFile) doConvert(xlsxFile, next);
+        return next;
+      });
+    },
+    [xlsxFile, doConvert]
   );
 
   return (
-    <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-4">
-      <div
-        className={`flex-1 border-2 border-dashed rounded-lg px-4 py-2 text-center cursor-pointer transition-colors ${
-          dragOver
-            ? "border-blue-400 bg-blue-50"
-            : "border-gray-300 hover:border-gray-400"
-        }`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={handleDrop}
-        onClick={() => xlsxInputRef.current?.click()}
-      >
-        {loading ? (
-          <div className="flex items-center justify-center gap-2 text-blue-600">
-            <svg
-              className="animate-spin h-4 w-4"
-              viewBox="0 0 24 24"
-              fill="none"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-              />
-            </svg>
-            <span>Converting...</span>
-          </div>
-        ) : (
-          <span className="text-gray-500 text-sm">
-            {fileName
-              ? `${fileName} — Drop or click to replace`
-              : "Drop XLSForm (.xlsx) here or click to upload"}
-          </span>
-        )}
-        <input
-          ref={xlsxInputRef}
-          type="file"
-          accept=".xlsx"
-          className="hidden"
-          onChange={handleFileSelect}
-        />
+    <div className="bg-white border-b border-gray-200 px-4 py-2 flex flex-col gap-1">
+      <div className="flex items-center gap-3">
+        {/* XLSX drop zone */}
+        <div
+          className={`flex-1 border-2 border-dashed rounded-lg px-4 py-2 text-center cursor-pointer transition-colors ${
+            dragOver ? "border-blue-400 bg-blue-50" : "border-gray-300 hover:border-blue-400 hover:bg-gray-50"
+          }`}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => xlsxInputRef.current?.click()}
+        >
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 text-blue-600 text-sm">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span>Converting...</span>
+            </div>
+          ) : (
+            <span className="text-gray-500 text-sm">
+              {xlsxFile
+                ? `📄 ${xlsxFile.name} — click to replace`
+                : "Drop XLSForm (.xlsx) here or click to upload"}
+            </span>
+          )}
+          <input ref={xlsxInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleFileSelect} />
+        </div>
+
+        {/* CSV button */}
+        <button
+          type="button"
+          className="text-sm px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors whitespace-nowrap border border-gray-200"
+          onClick={() => csvInputRef.current?.click()}
+        >
+          + CSV files
+          <input ref={csvInputRef} type="file" accept=".csv" multiple className="hidden" onChange={handleCsvSelect} />
+        </button>
       </div>
 
-      <button
-        type="button"
-        className="text-sm px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors whitespace-nowrap border border-gray-200"
-        onClick={() => csvInputRef.current?.click()}
-      >
-        + CSV files
-        <input
-          ref={csvInputRef}
-          type="file"
-          accept=".csv"
-          multiple
-          className="hidden"
-          onChange={handleCsvSelect}
-        />
-      </button>
-      {csvFilesRef.current.length > 0 && (
-        <span className="text-xs text-gray-400">
-          {csvFilesRef.current.length} CSV
-          {csvFilesRef.current.length > 1 ? "s" : ""}
-        </span>
+      {/* CSV chips */}
+      {csvFiles.length > 0 && (
+        <div className="flex flex-wrap gap-1 px-1">
+          {csvFiles.map(f => (
+            <span key={f.name} className="flex items-center gap-1 text-[11px] bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-0.5">
+              {f.name}
+              <button
+                type="button"
+                className="text-blue-400 hover:text-red-500 ml-0.5 leading-none"
+                onClick={() => handleRemoveCsv(f.name)}
+                title="Remove"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
       )}
     </div>
   );
