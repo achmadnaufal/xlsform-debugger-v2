@@ -49,33 +49,39 @@ git clone https://github.com/achmadnaufal/xlsform-debugger-v2.git
 cd xlsform-debugger-v2
 ```
 
-### 2. Install API dependencies
+### 2. Install dependencies
 ```bash
+# API (Python)
 cd api
 pip install -r requirements.txt
-```
 
-### 3. Install frontend dependencies
-```bash
-cd app
+# Frontend (Node)
+cd ../app
 npm install
 ```
 
-### 4. Start the API
+### 3. Start the app
 ```bash
+./start.sh
+```
+This single command starts both the API (port 5050) and frontend (port 5173), and Ctrl+C stops both.
+
+### 4. Open
+→ **http://localhost:5173**
+
+<details>
+<summary>Manual startup (separate terminals)</summary>
+
+```bash
+# Terminal 1 — API
 cd api
 uvicorn main:app --port 5050
-```
-Keep this terminal open.
 
-### 5. Start the frontend *(new terminal)*
-```bash
+# Terminal 2 — Frontend
 cd app
 npm run dev
 ```
-
-### 6. Open
-→ **http://localhost:5173**
+</details>
 
 > A sample form and pulldata CSV are in the `docs/` folder if you want to try it immediately.
 
