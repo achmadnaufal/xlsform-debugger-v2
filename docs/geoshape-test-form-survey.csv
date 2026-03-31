@@ -1,0 +1,9 @@
+type,name,label,required,constraint,hint
+start,start,,
+geopoint,site_location,Site Location,yes,,Click on map to place marker
+text,site_name,Site Name,yes,,e.g. "Farm A"
+geoshape,survey_boundary,Survey Boundary,no,,Draw polygon boundary
+geopoint,second_point,Second Point (Optional),,,Click to add another point
+geotrace,walking_route,Walking Route (Optional),,,Draw your path
+text,notes,Notes,,,Additional observations
+end,end,,
