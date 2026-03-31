@@ -4,7 +4,7 @@ import type { ConvertResponse, ExternalDataEntry, XlsFormSheets } from "../types
 import { csvFileToXml } from "../utils/csvToXml";
 import { useStatus } from "../contexts/StatusContext";
 
-const API_URL = `${import.meta.env.VITE_API_URL ?? "http://localhost:5050"}/convert`;
+const API_URL = `${import.meta.env.VITE_API_URL ?? import.meta.env.BASE_URL.replace(/\/$/, "")}/convert`;
 
 interface FileUploadBarProps {
   readonly onConvert: (xformXml: string, warnings: readonly string[], externalData: readonly ExternalDataEntry[], xlsformSheets: XlsFormSheets) => void;

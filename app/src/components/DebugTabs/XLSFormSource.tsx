@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import type { XlsFormSheets } from "../../types";
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5050";
+const API_BASE = import.meta.env.VITE_API_URL ?? import.meta.env.BASE_URL.replace(/\/$/, "");
 
 interface XLSFormSourceProps {
   readonly xlsformSheets: XlsFormSheets;

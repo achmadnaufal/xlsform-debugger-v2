@@ -4,9 +4,21 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
 export default defineConfig(({ mode: _mode }) => ({
+  base: "/xlsform/",
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
+    allowedHosts: ["tools.achmadnaufal.com"],
+    proxy: {
+      "/xlsform/convert": {
+        target: "http://localhost:5050",
+        rewrite: (path: string) => path.replace(/^\/xlsform/, ""),
+      },
+      "/xlsform/export": {
+        target: "http://localhost:5050",
+        rewrite: (path: string) => path.replace(/^\/xlsform/, ""),
+      },
+    },
   },
   css: {
     preprocessorOptions: {
