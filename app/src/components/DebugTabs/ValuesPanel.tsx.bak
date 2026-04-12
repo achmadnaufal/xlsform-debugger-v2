@@ -1,0 +1,826 @@
+import { Fragment, useState, useEffect, useMemo, useCallback } from "react";
+import type { FormVariable, XlsRows } from "../../types";
+import type { FieldMeta } from "../../utils/xformParser";
+import { parseXFormFields, extractVarRefs } from "../../utils/xformParser";
+import { evaluateRelevant, evaluateConstraint } from "../../utils/expressionEvaluator";
+
+// --- Enketo helpers ---
+
+function getEnketoValue(xpath: string): string {
+  try {
+    const form = window.__enketoForm;
+    if (!form) return "";
+    return String(form.model.node(xpath).getVal() ?? "");
+  } catch {
+    return "";
+  }
+}
+
+function setEnketoValue(xpath: string, value: string): void {
+  try {
+    const form = window.__enketoForm;
+    if (!form) return;
+    form.model.node(xpath).setVal(value, null, "string");
+    form.view.$.trigger("dataupdate");
+  } catch {
+    // ignore — field may not exist in model
+  }
+}
+
+function isFieldHidden(name: string): boolean {
+  try {
+    const form = window.__enketoForm;
+    if (form) {
+      const nodes = form.model.xml.querySelectorAll("bind");
+      for (const bind of Array.from(nodes) as Element[]) {
+        const nodeset = bind.getAttribute("nodeset") ?? "";
+        if (nodeset.endsWith("/" + name)) {
+          const relevant = bind.getAttribute("relevant");
+          if (relevant) {
+            const el =
+              document.querySelector(`.question[data-name*="${name}"]`) ??
+              document.querySelector(`.question [name*="${name}"]`)?.closest(".question");
+            if (el) {
+              return (
+                el.classList.contains("disabled") ||
+                el.classList.contains("hidden") ||
+                el.closest(".disabled") !== null
+              );
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // fall through
+  }
+  const el =
+    document.querySelector(`.question[data-name*="${name}"]`) ??
+    document.querySelector(`.question [name*="${name}"]`)?.closest(".question");
+  if (!el) return false;
+  return (
+    el.classList.contains("disabled") ||
+    el.classList.contains("hidden") ||
+    el.closest(".disabled") !== null
+  );
+}
+
+// --- Choice parsing ---
+
+interface Choice {
+  readonly name: string;
+  readonly label: string;
+}
+
+function parseChoicesForField(xformXml: string, field: FieldMeta): Choice[] {
+  try {
+    const doc = new DOMParser().parseFromString(xformXml, "application/xml");
+    const selects = doc.querySelectorAll("select1, select");
+    for (const sel of Array.from(selects)) {
+      const ref = sel.getAttribute("ref") ?? "";
+      const fieldName = ref.split("/").pop() ?? "";
+      if (fieldName === field.name) {
+        const items = sel.querySelectorAll(":scope > item");
+        if (items.length > 0) {
+          return Array.from(items)
+            .map((item) => ({
+              name: item.querySelector("value")?.textContent?.trim() ?? "",
+              label: item.querySelector("label value, label")?.textContent?.trim() ?? "",
+            }))
+            .filter((c) => c.name);
+        }
+        const itemset = sel.querySelector("itemset");
+        if (itemset) {
+          const nodeset = itemset.getAttribute("nodeset") ?? "";
+          const instanceMatch = nodeset.match(/instance\('([^']+)'\)/);
+          if (instanceMatch) {
+            return parseChoicesFromInstance(doc, instanceMatch[1]);
+          }
+        }
+      }
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function parseChoicesFromInstance(doc: Document, listName: string): Choice[] {
+  const instance = doc.querySelector(`instance[id="${listName}"]`);
+  if (!instance) return [];
+  const items = Array.from(instance.querySelectorAll("item, *"));
+  return items
+    .slice(0, 200)
+    .map((el) => ({
+      name: el.querySelector("name")?.textContent?.trim() ?? el.getAttribute("name") ?? "",
+      label: el.querySelector("label")?.textContent?.trim() ?? "",
+    }))
+    .filter((c) => c.name);
+}
+
+// --- Merged row type ---
+
+interface ValueRow {
+  readonly name: string;
+  readonly xpath: string;
+  readonly value: string;
+  readonly formula: string;
+  readonly isCalculate: boolean;
+  readonly fieldMeta: FieldMeta | null;
+}
+
+// --- Inline edit component ---
+
+function InlineValueEditor({
+  xpath,
+  value,
+  isOverridden,
+  isNaN_,
+  onOverride,
+}: {
+  readonly xpath: string;
+  readonly value: string;
+  readonly isOverridden: boolean;
+  readonly isNaN_: boolean;
+  readonly onOverride: (xpath: string, value: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const isEmpty = value === "" || value === "-";
+
+  const commit = () => {
+    setEnketoValue(xpath, draft);
+    onOverride(xpath, draft);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") setEditing(false);
+        }}
+        className="w-full bg-gray-100 border border-blue-500 rounded px-1 py-0.5 text-xs font-mono text-blue-700 focus:outline-none"
+      />
+    );
+  }
+
+  return (
+    <span
+      title="Click to edit value"
+      className={`font-mono text-xs cursor-pointer hover:underline ${
+        isNaN_ ? "text-red-600" : isEmpty ? "text-gray-400" : "text-green-700"
+      }`}
+      onClick={() => {
+        setDraft(value);
+        setEditing(true);
+      }}
+    >
+      {isEmpty ? "\u2014" : value}
+      {isOverridden && (
+        <span className="ml-1 text-[10px] bg-orange-100 text-orange-600 px-1 rounded">
+          override
+        </span>
+      )}
+    </span>
+  );
+}
+
+// --- Detail panel ---
+
+interface DetailPanelProps {
+  readonly row: ValueRow;
+  readonly xformXml: string | null;
+  readonly formValues: Record<string, string>;
+  readonly fields: Map<string, FieldMeta>;
+  readonly xlsRows: XlsRows;
+  readonly onUpdateField: (fieldName: string, updates: Record<string, string>) => void;
+  readonly onApplyEdits: () => Promise<void>;
+  readonly onQuestionSelect: (name: string) => void;
+}
+
+const EDITABLE_FIELDS = ["label", "hint", "relevant", "constraint", "calculation", "required"] as const;
+
+function DetailPanel({
+  row,
+  xformXml,
+  formValues,
+  fields,
+  xlsRows,
+  onUpdateField,
+  onApplyEdits,
+  onQuestionSelect,
+}: DetailPanelProps) {
+  const field = row.fieldMeta;
+  const [editDrafts, setEditDrafts] = useState<Record<string, string>>({});
+  const [applyingDetail, setApplyingDetail] = useState(false);
+
+  // Sync drafts from xlsRows when they change
+  const currentXlsValues = useMemo(() => {
+    const surveyRow = xlsRows.survey.find(
+      (r) => String(r["name"] ?? "") === row.name
+    );
+    const result: Record<string, string> = {};
+    for (const f of EDITABLE_FIELDS) {
+      result[f] = String(surveyRow?.[f] ?? "");
+    }
+    return result;
+  }, [xlsRows.survey, row.name]);
+
+  useEffect(() => {
+    setEditDrafts(currentXlsValues);
+  }, [currentXlsValues]);
+
+  const hasDraftChanges = useMemo(() => {
+    return EDITABLE_FIELDS.some((f) => editDrafts[f] !== currentXlsValues[f]);
+  }, [editDrafts, currentXlsValues]);
+
+  const handleDraftChange = (fieldKey: string, value: string) => {
+    setEditDrafts((prev) => ({ ...prev, [fieldKey]: value }));
+  };
+
+  const handleApply = async () => {
+    if (!hasDraftChanges) return;
+    setApplyingDetail(true);
+    try {
+      const updates: Record<string, string> = {};
+      for (const f of EDITABLE_FIELDS) {
+        if (editDrafts[f] !== currentXlsValues[f]) {
+          updates[f] = editDrafts[f];
+        }
+      }
+      onUpdateField(row.name, updates);
+      await onApplyEdits();
+    } finally {
+      setApplyingDetail(false);
+    }
+  };
+
+  const currentValue = formValues[row.name] ?? "";
+
+  // Expression evaluation
+  const relevantExpr = field?.relevant ?? "";
+  const constraintExpr = field?.constraint ?? "";
+  const relevantResult = relevantExpr ? evaluateRelevant(relevantExpr, formValues) : null;
+  const constraintResult =
+    constraintExpr && currentValue
+      ? evaluateConstraint(constraintExpr, currentValue, formValues)
+      : null;
+
+  // Dependencies
+  const depExprFields = ["relevant", "constraint", "calculation", "choiceFilter"] as const;
+  const deps = new Set<string>();
+  if (field) {
+    for (const f of depExprFields) {
+      for (const ref of extractVarRefs(field[f])) {
+        deps.add(ref);
+      }
+    }
+  }
+
+  const dependents: Array<{ name: string; field: string }> = [];
+  if (field) {
+    fields.forEach((f) => {
+      if (f.name === field.name) return;
+      for (const df of depExprFields) {
+        if (extractVarRefs(f[df]).includes(field.name)) {
+          dependents.push({ name: f.name, field: df });
+        }
+      }
+    });
+  }
+
+  // Choices
+  const isSelectType =
+    field &&
+    (field.type.startsWith("select_one") ||
+      field.type.startsWith("select_multiple") ||
+      field.type === "select1" ||
+      field.type === "select");
+  const choices = isSelectType && xformXml && field ? parseChoicesForField(xformXml, field) : [];
+
+  return (
+    <tr>
+      <td colSpan={5} className="p-0">
+        <div className="bg-blue-50/50 border-t border-b border-blue-200 px-4 py-3 space-y-3">
+          {/* Header */}
+          <div className="flex items-center gap-2">
+            <span className="text-blue-600 font-mono font-medium text-sm">{row.name}</span>
+            {field && (
+              <span className="text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded font-mono">
+                {field.type || "unknown"}
+              </span>
+            )}
+          </div>
+
+          {/* Current value + XPath */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white border border-gray-200 rounded p-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">
+                Current Value
+              </div>
+              <div className={`font-mono text-xs ${currentValue ? "text-green-700" : "text-gray-400"}`}>
+                {currentValue || "\u2014 (empty)"}
+              </div>
+            </div>
+            <div className="bg-white border border-gray-200 rounded p-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1">
+                XPath
+              </div>
+              <div className="font-mono text-xs text-gray-700 break-all">{row.xpath}</div>
+            </div>
+          </div>
+
+          {/* Expressions with evaluation badges */}
+          {(relevantExpr || constraintExpr || row.formula) && (
+            <div className="bg-white border border-gray-200 rounded p-2 space-y-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                Expressions
+              </div>
+              {relevantExpr && (
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold text-gray-600">relevant</span>
+                    {relevantResult !== null && (
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                          relevantResult
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {relevantResult ? "Visible" : "Hidden"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="font-mono text-xs text-yellow-600 break-all">{relevantExpr}</div>
+                </div>
+              )}
+              {constraintExpr && (
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold text-gray-600">constraint</span>
+                    {constraintResult !== null && (
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                          constraintResult
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {constraintResult ? "Passes" : "Fails"}
+                      </span>
+                    )}
+                    {!currentValue && (
+                      <span className="text-[10px] text-gray-400">No value</span>
+                    )}
+                  </div>
+                  <div className="font-mono text-xs text-yellow-600 break-all">
+                    {constraintExpr}
+                  </div>
+                </div>
+              )}
+              {row.formula && (
+                <div>
+                  <span className="text-[10px] font-semibold text-gray-600">calculation</span>
+                  <div className="font-mono text-xs text-yellow-600 break-all">{row.formula}</div>
+                </div>
+              )}
+              {field?.choiceFilter && (
+                <div>
+                  <span className="text-[10px] font-semibold text-gray-600">choice_filter</span>
+                  <div className="font-mono text-xs text-yellow-600 break-all">
+                    {field.choiceFilter}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Depends On chips */}
+          {deps.size > 0 && (
+            <div className="bg-white border border-gray-200 rounded p-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
+                Depends On ({deps.size})
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {[...deps].map((dep) => {
+                  const depHidden = isFieldHidden(dep);
+                  return (
+                    <button
+                      key={dep}
+                      type="button"
+                      onClick={() => onQuestionSelect(dep)}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-mono rounded transition-colors ${
+                        depHidden
+                          ? "bg-orange-100 text-orange-700 hover:bg-orange-200"
+                          : "bg-gray-100 hover:bg-gray-200 text-blue-600"
+                      }`}
+                      title={depHidden ? `${dep} is currently hidden` : dep}
+                    >
+                      {dep}
+                      {depHidden && <span className="text-orange-500 font-bold">!</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Used By chips */}
+          {dependents.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded p-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
+                Used By ({dependents.length})
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {dependents.map((d) => {
+                  const depHidden = isFieldHidden(d.name);
+                  return (
+                    <button
+                      key={`${d.name}:${d.field}`}
+                      type="button"
+                      onClick={() => onQuestionSelect(d.name)}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-mono rounded transition-colors ${
+                        depHidden
+                          ? "bg-orange-100 text-orange-700 hover:bg-orange-200"
+                          : "bg-gray-100 hover:bg-gray-200 text-purple-600"
+                      }`}
+                      title={
+                        depHidden
+                          ? `${d.name} is currently hidden (via ${d.field})`
+                          : `via ${d.field}`
+                      }
+                    >
+                      {d.name}
+                      <span className="text-gray-400 font-sans">({d.field})</span>
+                      {depHidden && <span className="text-orange-500 font-bold">!</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Choices */}
+          {isSelectType && (
+            <div className="bg-white border border-gray-200 rounded p-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
+                Choices
+                {field?.choiceFilter && (
+                  <span className="ml-1 px-1 bg-yellow-100 text-yellow-600 rounded normal-case">
+                    filtered
+                  </span>
+                )}
+                {choices.length > 0 && (
+                  <span className="ml-1 text-gray-400 normal-case">({choices.length})</span>
+                )}
+              </div>
+              {choices.length === 0 ? (
+                <div className="text-gray-400 text-xs">
+                  No inline choices found (may be external/itemset)
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1">
+                  {choices.map((c) => (
+                    <span
+                      key={c.name}
+                      className="px-1.5 py-0.5 bg-gray-100 text-xs font-mono rounded border border-gray-200"
+                      title={c.label || c.name}
+                    >
+                      {c.name}
+                      {c.label && c.label !== c.name && (
+                        <span className="text-gray-500 font-sans ml-1">{c.label}</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Inline XLSForm field editor (Phase 2) */}
+          {xlsRows.survey.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded p-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-2">
+                Edit Field Definition
+              </div>
+              <div className="space-y-1.5">
+                {EDITABLE_FIELDS.map((f) => (
+                  <div key={f} className="flex items-center gap-2">
+                    <label className="text-[10px] font-semibold text-gray-600 w-20 shrink-0 text-right">
+                      {f}
+                    </label>
+                    <input
+                      type="text"
+                      value={editDrafts[f] ?? ""}
+                      onChange={(e) => handleDraftChange(f, e.target.value)}
+                      className="flex-1 bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs font-mono text-gray-900 focus:outline-none focus:border-blue-500"
+                      placeholder={`(no ${f})`}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleApply}
+                  disabled={!hasDraftChanges || applyingDetail}
+                  className={`text-xs px-3 py-1 rounded transition-colors ${
+                    applyingDetail
+                      ? "bg-blue-100 text-blue-500 cursor-wait"
+                      : hasDraftChanges
+                        ? "bg-blue-600 text-white hover:bg-blue-700"
+                        : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  }`}
+                >
+                  {applyingDetail ? "Applying..." : "Apply"}
+                </button>
+                {hasDraftChanges && (
+                  <span className="text-[10px] text-orange-600">Unsaved changes</span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// --- Main component ---
+
+interface ValuesPanelProps {
+  readonly variables: readonly FormVariable[];
+  readonly xformXml: string | null;
+  readonly selectedQuestion: string | null;
+  readonly onQuestionSelect: (name: string) => void;
+  readonly xlsRows: XlsRows;
+  readonly onUpdateField: (fieldName: string, updates: Record<string, string>) => void;
+  readonly onApplyEdits: () => Promise<void>;
+}
+
+export function ValuesPanel({
+  variables,
+  xformXml,
+  selectedQuestion,
+  onQuestionSelect,
+  xlsRows,
+  onUpdateField,
+  onApplyEdits,
+}: ValuesPanelProps) {
+  const [search, setSearch] = useState("");
+  const [nonEmptyOnly, setNonEmptyOnly] = useState(false);
+  const [calcsOnly, setCalcsOnly] = useState(false);
+  const [overrides, setOverrides] = useState<Set<string>>(new Set());
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [liveCalcValues, setLiveCalcValues] = useState<Record<string, string>>({});
+
+  // Parse fields from xform
+  const fields = useMemo<Map<string, FieldMeta>>(() => {
+    if (!xformXml) return new Map();
+    try {
+      return parseXFormFields(xformXml);
+    } catch {
+      return new Map();
+    }
+  }, [xformXml]);
+
+  // Build form values lookup
+  const formValues = useMemo(() => {
+    const values: Record<string, string> = {};
+    for (const v of variables) {
+      values[v.name] = v.value;
+    }
+    return values;
+  }, [variables]);
+
+  // Identify calculate fields for live polling
+  const calcFields = useMemo(() => {
+    return [...fields.values()].filter((f) => !!f.calculation);
+  }, [fields]);
+
+  // Live polling for calculate fields
+  const refreshCalcValues = useCallback(() => {
+    const updated: Record<string, string> = {};
+    for (const f of calcFields) {
+      updated[f.xpath] = getEnketoValue(f.xpath);
+    }
+    setLiveCalcValues(updated);
+  }, [calcFields]);
+
+  useEffect(() => {
+    refreshCalcValues();
+    const id = setInterval(refreshCalcValues, 2000);
+    return () => clearInterval(id);
+  }, [refreshCalcValues]);
+
+  useEffect(() => {
+    const handler = () => refreshCalcValues();
+    document.addEventListener("dataupdate", handler);
+    return () => document.removeEventListener("dataupdate", handler);
+  }, [refreshCalcValues]);
+
+  // When selectedQuestion changes, expand that row
+  useEffect(() => {
+    if (selectedQuestion) {
+      setExpandedRow(selectedQuestion);
+    }
+  }, [selectedQuestion]);
+
+  // Build merged rows
+  const rows = useMemo<ValueRow[]>(() => {
+    const variableMap = new Map<string, FormVariable>();
+    for (const v of variables) {
+      variableMap.set(v.name, v);
+    }
+
+    // Start with all variables from formState
+    const seen = new Set<string>();
+    const result: ValueRow[] = [];
+
+    for (const v of variables) {
+      seen.add(v.name);
+      const meta = fields.get(v.name) ?? null;
+      const isCalc = !!meta?.calculation;
+      result.push({
+        name: v.name,
+        xpath: v.xpath,
+        value: isCalc ? (liveCalcValues[meta!.xpath] ?? v.value) : v.value,
+        formula: meta?.calculation ?? "",
+        isCalculate: isCalc,
+        fieldMeta: meta,
+      });
+    }
+
+    // Add calculate-only fields not in variables list
+    for (const f of calcFields) {
+      if (!seen.has(f.name)) {
+        seen.add(f.name);
+        result.push({
+          name: f.name,
+          xpath: f.xpath,
+          value: liveCalcValues[f.xpath] ?? "",
+          formula: f.calculation,
+          isCalculate: true,
+          fieldMeta: f,
+        });
+      }
+    }
+
+    return result;
+  }, [variables, fields, calcFields, liveCalcValues]);
+
+  // Filter
+  const filtered = useMemo(() => {
+    return rows.filter((r) => {
+      if (nonEmptyOnly && (r.value === "" || r.value === "-")) return false;
+      if (calcsOnly && !r.isCalculate) return false;
+      if (
+        search &&
+        !r.name.toLowerCase().includes(search.toLowerCase()) &&
+        !r.value.toLowerCase().includes(search.toLowerCase()) &&
+        !r.formula.toLowerCase().includes(search.toLowerCase())
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [rows, search, nonEmptyOnly, calcsOnly]);
+
+  const handleOverride = (xpath: string, _value: string) => {
+    setOverrides((prev) => new Set([...prev, xpath]));
+    setTimeout(refreshCalcValues, 100);
+  };
+
+  const toggleExpand = (name: string) => {
+    setExpandedRow((prev) => (prev === name ? null : name));
+  };
+
+  if (variables.length === 0 && calcFields.length === 0) {
+    return (
+      <div className="p-4 text-gray-400 text-sm">
+        No variables yet. Load a form and interact with it.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Toolbar */}
+      <div className="px-3 py-2 border-b border-gray-200 flex gap-2 items-center shrink-0">
+        <input
+          type="text"
+          placeholder="Search fields..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500"
+        />
+        <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer whitespace-nowrap">
+          <input
+            type="checkbox"
+            checked={nonEmptyOnly}
+            onChange={(e) => setNonEmptyOnly(e.target.checked)}
+            className="accent-blue-500"
+          />
+          Non-empty
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer whitespace-nowrap">
+          <input
+            type="checkbox"
+            checked={calcsOnly}
+            onChange={(e) => setCalcsOnly(e.target.checked)}
+            className="accent-blue-500"
+          />
+          Calcs only
+        </label>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-auto flex-1">
+        <table className="w-full text-xs">
+          <thead className="sticky top-0 bg-gray-100 z-10">
+            <tr className="text-left text-gray-600 border-b border-gray-200">
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider w-5" />
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
+                Field
+              </th>
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
+                Value{" "}
+                <span className="font-normal text-gray-400 normal-case">(click to edit)</span>
+              </th>
+              <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
+                Formula
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((r) => {
+              const isEmpty = r.value === "" || r.value === "-";
+              const isNaN_ = r.value === "NaN";
+              const isExpanded = expandedRow === r.name;
+
+              return (
+                <Fragment key={r.xpath}>
+                  <tr
+                    className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
+                      !isEmpty && !isNaN_ ? "bg-blue-50/30" : ""
+                    } ${isExpanded ? "bg-blue-50" : ""}`}
+                    onClick={() => toggleExpand(r.name)}
+                  >
+                    <td className="px-3 py-1.5 text-gray-400">
+                      <span className={`text-[10px] transition-transform inline-block ${isExpanded ? "rotate-90" : ""}`}>
+                        {"\u25B6"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-1.5 text-blue-700 font-mono text-xs whitespace-nowrap">
+                      {r.name}
+                      {r.isCalculate && (
+                        <span className="ml-1.5 text-[9px] bg-purple-100 text-purple-600 px-1 rounded">
+                          calc
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-xs" onClick={(e) => e.stopPropagation()}>
+                      <InlineValueEditor
+                        xpath={r.xpath}
+                        value={r.value}
+                        isOverridden={overrides.has(r.xpath)}
+                        isNaN_={isNaN_}
+                        onOverride={handleOverride}
+                      />
+                    </td>
+                    <td className="px-3 py-1.5 text-yellow-600 font-mono text-xs max-w-48 truncate" title={r.formula}>
+                      {r.formula || "\u2014"}
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <DetailPanel
+                      row={r}
+                      xformXml={xformXml}
+                      formValues={formValues}
+                      fields={fields}
+                      xlsRows={xlsRows}
+                      onUpdateField={onUpdateField}
+                      onApplyEdits={onApplyEdits}
+                      onQuestionSelect={onQuestionSelect}
+                    />
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+        {filtered.length === 0 && (
+          <div className="p-4 text-gray-400 text-sm text-center">No matching fields.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+

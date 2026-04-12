@@ -90,7 +90,7 @@ interface ValuesTableProps {
   readonly variables: readonly FormVariable[];
   readonly xformXml: string | null;
   readonly selectedQuestion: string | null;
-  readonly onQuestionSelect: (name: string) => void;
+  readonly onQuestionSelect: (name: string | null) => void;
   readonly xlsRows?: XlsRows;
 }
 

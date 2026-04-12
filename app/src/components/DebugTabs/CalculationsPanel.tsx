@@ -87,7 +87,7 @@ function ValueCell({
   return (
     <span
       className={`font-mono text-xs cursor-pointer hover:underline ${
-        isNaN_ ? "text-red-600" : isEmpty ? "text-gray-400" : "text-green-700"
+        (isNaN_ || isEmpty) ? "text-gray-400" : "text-green-700"
       }`}
       title="Click to override value"
       onClick={() => {
@@ -95,7 +95,7 @@ function ValueCell({
         setEditing(true);
       }}
     >
-      {isEmpty ? "—" : row.liveValue}
+      {(isEmpty || isNaN_) ? "—" : row.liveValue}
       {isOverridden(row.xpath) && (
         <span className="ml-1 text-[10px] bg-orange-100 text-orange-600 px-1 rounded">override</span>
       )}

@@ -6,7 +6,7 @@ import { evaluateRelevant, evaluateConstraint } from "../../utils/expressionEval
 
 interface QuestionInspectorProps {
   readonly selectedQuestion: string | null;
-  readonly onQuestionSelect: (name: string) => void;
+  readonly onQuestionSelect: (name: string | null) => void;
   readonly xformXml: string | null;
   readonly variables: readonly FormVariable[];
 }

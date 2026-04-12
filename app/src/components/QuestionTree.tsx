@@ -163,7 +163,7 @@ function TreeNodeItem({
       <div
         onClick={handleClick}
         title={node.name}
-        className={`flex items-center gap-1 px-2 py-0.5 cursor-pointer rounded text-xs select-none transition-colors ${
+        className={`flex items-center gap-1 pr-2 py-0.5 cursor-pointer rounded text-xs select-none transition-colors ${
           isSelected
             ? "bg-blue-100 text-blue-700"
             : isGroup

@@ -44,18 +44,16 @@ function InlineValueEditor({
   xpath,
   value,
   isOverridden,
-  isNaN_,
   onOverride,
 }: {
   readonly xpath: string;
   readonly value: string;
   readonly isOverridden: boolean;
-  readonly isNaN_: boolean;
   readonly onOverride: (xpath: string, value: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
-  const isEmpty = value === "" || value === "-";
+  const isEmpty = value === "" || value === "-" || value === undefined || value === "NaN";
 
   const commit = () => {
     setEnketoValue(xpath, draft);
@@ -83,10 +81,10 @@ function InlineValueEditor({
     <span
       title="Click to edit value"
       className={`font-mono cursor-pointer hover:underline ${
-        isNaN_ ? "text-red-600" : isEmpty ? "text-gray-400" : "text-green-700"
+        isEmpty ? "text-gray-400" : "text-green-700"
       }`}
       onClick={() => {
-        setDraft(value);
+        setDraft(isEmpty ? "" : value);
         setEditing(true);
       }}
     >
@@ -106,7 +104,7 @@ interface ValuesPanelProps {
   readonly variables: readonly FormVariable[];
   readonly xformXml: string | null;
   readonly selectedQuestion: string | null;
-  readonly onQuestionSelect: (name: string) => void;
+  readonly onQuestionSelect: (name: string | null) => void;
   readonly xlsRows: XlsRows;
   readonly onUpdateField: (fieldName: string, updates: Record<string, string>) => void;
   readonly onApplyEdits: () => Promise<void>;
@@ -173,11 +171,9 @@ export function ValuesPanel({
     return () => document.removeEventListener("dataupdate", handler);
   }, [refreshCalcValues]);
 
-  // When selectedQuestion changes, expand that row
+  // When selectedQuestion changes, sync expanded row (reset on null)
   useEffect(() => {
-    if (selectedQuestion) {
-      setExpandedRow(selectedQuestion);
-    }
+    setExpandedRow(selectedQuestion);
   }, [selectedQuestion]);
 
   // Build merged rows
@@ -226,7 +222,7 @@ export function ValuesPanel({
   // Filter
   const filtered = useMemo(() => {
     return rows.filter((r) => {
-      if (nonEmptyOnly && (r.value === "" || r.value === "-")) return false;
+      if (nonEmptyOnly && (r.value === "" || r.value === "-" || r.value === "\u2014" || r.value == null || r.value === "NaN")) return false;
       if (calcsOnly && !r.isCalculate) return false;
       if (
         search &&
@@ -270,118 +266,123 @@ export function ValuesPanel({
   }
 
   return (
-    <div className="flex h-full gap-0">
-      {/* Left: Values List */}
-      <div className="flex flex-col flex-1 border-r border-gray-200">
-        {/* Toolbar */}
-        <div className="px-3 py-2 border-b border-gray-200 flex gap-2 items-center shrink-0">
-          <input
-            type="text"
-            placeholder="Search fields..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 bg-gray-50 border border-gray-200 rounded px-2 py-1 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500"
-          />
-          <label className="flex items-center gap-1.5 text-gray-600 cursor-pointer whitespace-nowrap">
-            <input
-              type="checkbox"
-              checked={nonEmptyOnly}
-              onChange={(e) => setNonEmptyOnly(e.target.checked)}
-              className="accent-blue-500"
-            />
-            Non-empty
-          </label>
-          <label className="flex items-center gap-1.5 text-gray-600 cursor-pointer whitespace-nowrap">
-            <input
-              type="checkbox"
-              checked={calcsOnly}
-              onChange={(e) => setCalcsOnly(e.target.checked)}
-              className="accent-blue-500"
-            />
-            Calcs only
-          </label>
-        </div>
-
-        {/* Table */}
-        <div className="overflow-auto flex-1">
-          <table className="w-full ">
-            <thead className="sticky top-0 bg-gray-100 z-10">
-              <tr className="text-left text-gray-600 border-b border-gray-200">
-                <th className="px-3 py-2 font-semibold uppercase tracking-wider w-5" />
-                <th className="px-3 py-2 font-semibold uppercase tracking-wider text-gray-600">
-                  Field
-                </th>
-                <th className="px-3 py-2 font-semibold uppercase tracking-wider text-gray-600">
-                  Value
-                </th>
-                <th className="px-3 py-2 font-semibold uppercase tracking-wider text-gray-600">
-                  Formula
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r) => {
-                const isEmpty = r.value === "" || r.value === "-";
-                const isNaN_ = r.value === "NaN";
-                const isSelected = expandedRow === r.name;
-
-                return (
-                  <tr
-                    key={r.xpath}
-                    className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
-                      !isEmpty && !isNaN_ ? "bg-blue-50/30" : ""
-                    } ${isSelected ? "bg-blue-100 border-l-4 border-l-blue-500" : ""}`}
-                    onClick={() => handleSelectField(r.name)}
-                  >
-                    <td className="px-3 py-1.5 text-gray-400">
-                      <span className={`transition-transform inline-block ${isSelected ? "rotate-90" : ""}`}>
-                        {"\u25B6"}
-                      </span>
-                    </td>
-                    <td className="px-3 py-1.5 text-blue-700 font-mono whitespace-nowrap">
-                      {r.name}
-                      {r.isCalculate && (
-                        <span className="ml-1.5 text-[9px] bg-purple-100 text-purple-600 px-1 rounded">
-                          calc
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-1.5 " onClick={(e) => e.stopPropagation()}>
-                      <InlineValueEditor
-                        xpath={r.xpath}
-                        value={r.value}
-                        isOverridden={overrides.has(r.xpath)}
-                        isNaN_={isNaN_}
-                        onOverride={handleOverride}
-                      />
-                    </td>
-                    <td className="px-3 py-1.5 text-yellow-600 font-mono max-w-48 truncate" title={r.formula}>
-                      {r.formula || "\u2014"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {filtered.length === 0 && (
-            <div className="p-4 text-gray-400 text-center">No matching fields.</div>
-          )}
-        </div>
-      </div>
-
-      {/* Right: Field Inspector */}
-      <div className="w-96 bg-white flex flex-col border-l border-gray-200">
-        <FieldInspector
-          selectedFieldName={selectedQuestion}
-          field={selectedField}
-          formValues={formValues}
-          fields={fields}
-          xlsRows={xlsRows}
-          onFieldSelect={handleSelectField}
-          onClose={handleCloseInspector}
-          onUpdate={handleUpdate}
+    <div className="flex flex-col h-full">
+      {/* Toolbar */}
+      <div className="px-3 py-2 border-b border-gray-200 flex gap-2 items-center shrink-0">
+        <input
+          type="text"
+          placeholder="Search fields..."
+          aria-label="Search fields"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 bg-gray-50 border border-gray-200 rounded px-2 py-1 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500"
         />
+        <label className="flex items-center gap-1.5 text-gray-600 cursor-pointer whitespace-nowrap">
+          <input
+            type="checkbox"
+            checked={nonEmptyOnly}
+            onChange={(e) => setNonEmptyOnly(e.target.checked)}
+            className="accent-blue-500"
+          />
+          Non-empty
+        </label>
+        <label className="flex items-center gap-1.5 text-gray-600 cursor-pointer whitespace-nowrap">
+          <input
+            type="checkbox"
+            checked={calcsOnly}
+            onChange={(e) => setCalcsOnly(e.target.checked)}
+            className="accent-blue-500"
+          />
+          Calcs only
+        </label>
       </div>
+
+      {/* Table */}
+      <div className="overflow-auto flex-1 min-h-0">
+        <table className="w-full">
+          <thead className="sticky top-0 bg-gray-100 z-10">
+            <tr className="text-left text-gray-600 border-b border-gray-200">
+              <th className="px-3 py-2 font-semibold uppercase tracking-wider w-5" />
+              <th className="px-3 py-2 font-semibold uppercase tracking-wider text-gray-600">
+                Field
+              </th>
+              <th className="px-3 py-2 font-semibold uppercase tracking-wider text-gray-600">
+                Value
+              </th>
+              <th className="px-3 py-2 font-semibold uppercase tracking-wider text-gray-600">
+                Formula
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((r) => {
+              const isEmpty = r.value === "" || r.value === "-" || r.value === undefined || r.value === "NaN";
+              const isSelected = expandedRow === r.name;
+
+              return (
+                <tr
+                  key={r.xpath}
+                  className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
+                    !isEmpty ? "bg-blue-50/30" : ""
+                  } ${isSelected ? "bg-blue-100 border-l-4 border-l-blue-500" : ""}`}
+                  onClick={() => handleSelectField(r.name)}
+                >
+                  <td className="px-3 py-1.5 text-gray-400">
+                    <span className={`transition-transform inline-block ${isSelected ? "rotate-90" : ""}`}>
+                      {"\u25B6"}
+                    </span>
+                  </td>
+                  <td className="px-3 py-1.5 text-blue-700 font-mono whitespace-nowrap">
+                    {r.name}
+                    {r.isCalculate && (
+                      <span className="ml-1.5 text-[9px] bg-purple-100 text-purple-600 px-1 rounded">
+                        calc
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
+                    <InlineValueEditor
+                      xpath={r.xpath}
+                      value={r.value}
+                      isOverridden={overrides.has(r.xpath)}
+                      onOverride={handleOverride}
+                    />
+                  </td>
+                  <td className="px-3 py-1.5 text-yellow-600 font-mono max-w-48 truncate" title={r.formula}>
+                    {r.formula || "\u2014"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {filtered.length === 0 && (
+          <div className="p-4 text-gray-400 text-center">No matching fields.</div>
+        )}
+      </div>
+
+      {/* Bottom: Field Inspector (shown when a row is selected) */}
+      {expandedRow !== null && (
+        <div className="h-72 shrink-0 border-t border-gray-200 bg-white overflow-auto relative">
+          <button
+            onClick={handleCloseInspector}
+            className="absolute top-2 right-2 z-10 text-gray-400 hover:text-gray-700 bg-white rounded-full w-6 h-6 flex items-center justify-center border border-gray-200"
+            title="Close inspector"
+          >
+            {"\u2715"}
+          </button>
+          <FieldInspector
+            selectedFieldName={selectedQuestion}
+            field={selectedField}
+            formValues={formValues}
+            fields={fields}
+            xlsRows={xlsRows}
+            onFieldSelect={handleSelectField}
+            onClose={handleCloseInspector}
+            onUpdate={handleUpdate}
+          />
+        </div>
+      )}
     </div>
   );
 }

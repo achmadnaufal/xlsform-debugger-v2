@@ -40,6 +40,7 @@ export function XLSFormSource({ xformXml, selectedQuestion }: XLSFormSourceProps
         <input
           type="text"
           placeholder="Search fields..."
+          aria-label="Search fields"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500"

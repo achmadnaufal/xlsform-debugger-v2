@@ -40,11 +40,7 @@ export default defineConfig({
       },
     },
   },
-  build: {
-    rollupOptions: {
-      external: ["leaflet.gridlayer.googlemutant"],
-    },
-  },
+  build: {},
   resolve: {
     alias: {
       "leaflet.gridlayer.googlemutant": path.resolve(
@@ -54,7 +50,7 @@ export default defineConfig({
       // enketo-core bare specifier aliases (from its browser field)
       "enketo/config": path.resolve(
         __dirname,
-        "node_modules/enketo-core/config.js"
+        "src/config/enketo-config.js"
       ),
       "enketo/widgets": path.resolve(
         __dirname,

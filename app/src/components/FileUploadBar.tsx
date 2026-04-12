@@ -1,24 +1,44 @@
 import { useState, useCallback, useRef, type DragEvent } from "react";
 import axios from "axios";
-import type { ConvertResponse, ExternalDataEntry } from "../types";
+import type { ConvertResponse, ExternalDataEntry, XlsRows } from "../types";
 
 const API_URL = "http://localhost:5050/convert";
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 interface FileUploadBarProps {
-  readonly onConvert: (xformXml: string, warnings: readonly string[], externalData: readonly ExternalDataEntry[]) => void;
+  readonly onConvert: (xformXml: string, warnings: readonly string[], externalData: readonly ExternalDataEntry[], xlsRows: XlsRows) => void;
   readonly onError: (error: string) => void;
+  readonly onNewForm?: () => void;
+  readonly onExport?: () => void;
+  readonly exporting?: boolean;
+  readonly hasForm?: boolean;
 }
 
-export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
+function validateXlsxFile(file: File): string | null {
+  if (!file.name.toLowerCase().endsWith(".xlsx")) {
+    return "Only .xlsx files are supported";
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    return "File too large (max 10 MB)";
+  }
+  return null;
+}
+
+export function FileUploadBar({ onConvert, onError, onNewForm, onExport, exporting, hasForm }: FileUploadBarProps) {
   const [loading, setLoading] = useState(false);
   const [xlsxFile, setXlsxFile] = useState<File | null>(null);
   const [csvFiles, setCsvFiles] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const xlsxInputRef = useRef<HTMLInputElement>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
+  const convertingRef = useRef(false);
 
   const doConvert = useCallback(
     async (xlsx: File, csvs: File[]) => {
+      if (!xlsx || xlsx.size === 0) return;
+      if (convertingRef.current) return;
+      convertingRef.current = true;
       setLoading(true);
       try {
         const formData = new FormData();
@@ -29,7 +49,12 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
           headers: { "Content-Type": "multipart/form-data" },
         });
 
-        onConvert(response.data.xform_xml, response.data.warnings, response.data.external_data ?? []);
+        const xlsRows: XlsRows = {
+          survey: response.data.survey ?? [],
+          choices: response.data.choices ?? [],
+          settings: response.data.settings ?? [],
+        };
+        onConvert(response.data.xform_xml, response.data.warnings, response.data.external_data ?? [], xlsRows);
       } catch (err) {
         const message =
           axios.isAxiosError(err) && err.response?.data?.detail
@@ -40,6 +65,7 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
         onError(message);
       } finally {
         setLoading(false);
+        convertingRef.current = false;
       }
     },
     [onConvert, onError]
@@ -47,6 +73,12 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
 
   const handleXlsxFile = useCallback(
     (file: File) => {
+      const error = validateXlsxFile(file);
+      if (error) {
+        setValidationError(error);
+        return;
+      }
+      setValidationError(null);
       setXlsxFile(file);
       setCsvFiles(prev => {
         doConvert(file, prev);
@@ -151,7 +183,35 @@ export function FileUploadBar({ onConvert, onError }: FileUploadBarProps) {
           + CSV files
           <input ref={csvInputRef} type="file" accept=".csv" multiple className="hidden" onChange={handleCsvSelect} />
         </button>
+
+        {/* New Form button */}
+        {onNewForm && (
+          <button
+            type="button"
+            className="text-sm px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors whitespace-nowrap"
+            onClick={onNewForm}
+          >
+            + New Form
+          </button>
+        )}
+
+        {/* Export button */}
+        {hasForm && onExport && (
+          <button
+            type="button"
+            className="text-sm px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors whitespace-nowrap disabled:opacity-50"
+            onClick={onExport}
+            disabled={exporting}
+          >
+            {exporting ? "Exporting..." : "Export .xlsx"}
+          </button>
+        )}
       </div>
+
+      {/* Validation error */}
+      {validationError && (
+        <p className="text-red-600 text-xs px-1">{validationError}</p>
+      )}
 
       {/* CSV chips */}
       {csvFiles.length > 0 && (

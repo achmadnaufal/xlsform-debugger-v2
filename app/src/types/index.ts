@@ -7,6 +7,9 @@ export interface ConvertResponse {
   readonly xform_xml: string;
   readonly warnings: readonly string[];
   readonly external_data?: readonly ExternalDataEntry[];
+  readonly survey?: readonly Record<string, string>[];
+  readonly choices?: readonly Record<string, string>[];
+  readonly settings?: readonly Record<string, string>[];
 }
 
 export interface TransformResult {
@@ -39,4 +42,10 @@ export interface UploadedFiles {
   readonly csvFiles: readonly File[];
 }
 
-export type DebugTab = "variables" | "question" | "warnings" | "external" | "source";
+export type DebugTab = "builder" | "values" | "warnings" | "external" | "source" | "expressions";
+
+export interface XlsRows {
+  readonly survey: readonly Record<string, string>[];
+  readonly choices: readonly Record<string, string>[];
+  readonly settings: readonly Record<string, string>[];
+}

@@ -28,8 +28,8 @@ function EditableValue({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
 
-  const isNaN_ = variable.value === "NaN";
-  const isEmpty = variable.value === "" || variable.value === "-";
+  const isNaN_ = false; // VariableInspector has no calculate context; NaN treated as empty
+  const isEmpty = variable.value === "" || variable.value === "-" || variable.value === "NaN";
   const isOverridden = overrides.has(variable.xpath);
 
   const commit = () => {

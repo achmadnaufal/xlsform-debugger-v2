@@ -1,7 +1,9 @@
 """XLSForm Debugger v2 — FastAPI backend for converting XLSForm to ODK XForm XML."""
 
+import base64
 import csv
 import io
+import json
 import os
 import shutil
 import tempfile
@@ -10,12 +12,15 @@ from pathlib import Path
 from typing import Optional
 from xml.sax.saxutils import escape as xml_escape
 
+import openpyxl
+import openpyxl.utils.exceptions
 import pyxform
 import pyxform.xls2xform
 import pyxform.errors
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 app = FastAPI(title="XLSForm Debugger v2 API")
 
@@ -112,11 +117,87 @@ def _csv_to_xml(csv_content: str, filename: str) -> dict[str, str]:
     return {"id": file_id, "xml": "<root>" + "".join(items) + "</root>"}
 
 
+def _read_xlsx_rows(xlsx_path: Path) -> dict[str, list[dict[str, str]]]:
+    """Read survey, choices, settings sheets from an xlsx file as lists of row dicts."""
+    wb = openpyxl.load_workbook(str(xlsx_path), read_only=True, data_only=True)
+    result: dict[str, list[dict[str, str]]] = {}
+    for sheet_name in ("survey", "choices", "settings"):
+        if sheet_name not in wb.sheetnames:
+            result[sheet_name] = []
+            continue
+        ws = wb[sheet_name]
+        rows_iter = ws.iter_rows(values_only=True)
+        try:
+            headers = [str(h or "").strip() for h in next(rows_iter)]
+        except StopIteration:
+            result[sheet_name] = []
+            continue
+        sheet_rows: list[dict[str, str]] = []
+        for row in rows_iter:
+            row_dict = {
+                headers[i]: str(cell) if cell is not None else ""
+                for i, cell in enumerate(row)
+                if i < len(headers) and headers[i]
+            }
+            if any(v for v in row_dict.values()):
+                sheet_rows.append(row_dict)
+        result[sheet_name] = sheet_rows
+    wb.close()
+    return result
+
+
+def _write_xlsx_from_rows(
+    survey: list[dict[str, str]],
+    choices: list[dict[str, str]],
+    settings: list[dict[str, str]],
+    dest: Path,
+) -> Path:
+    """Build an xlsx file from row dicts for survey/choices/settings sheets."""
+    wb = openpyxl.Workbook()
+    for idx, (sheet_name, rows) in enumerate(
+        [("survey", survey), ("choices", choices), ("settings", settings)]
+    ):
+        ws = wb.active if idx == 0 else wb.create_sheet()
+        ws.title = sheet_name
+        if not rows:
+            continue
+        headers = list(rows[0].keys())
+        for col_idx, h in enumerate(headers, 1):
+            ws.cell(row=1, column=col_idx, value=h)
+        for row_idx, row in enumerate(rows, 2):
+            for col_idx, h in enumerate(headers, 1):
+                ws.cell(row=row_idx, column=col_idx, value=row.get(h, ""))
+    filepath = dest / "rebuilt.xlsx"
+    wb.save(str(filepath))
+    wb.close()
+    return filepath
+
+
+class ConvertJsonRequest(BaseModel):
+    survey: list[dict[str, str]]
+    choices: list[dict[str, str]]
+    settings: list[dict[str, str]]
+
+
+_MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
 @app.post("/convert")
 async def convert(
     xlsx_file: UploadFile = File(...),
     csv_files: Optional[list[UploadFile]] = File(None),
 ):
+    # Validate extension
+    filename = xlsx_file.filename or ""
+    if not filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Only .xlsx files are accepted")
+
+    # Validate file size
+    contents = await xlsx_file.read()
+    if len(contents) > _MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
+    await xlsx_file.seek(0)
+
     tmp_dir = Path(tempfile.mkdtemp())
     try:
         xlsform_path = _save_upload(xlsx_file, tmp_dir)
@@ -130,6 +211,7 @@ async def convert(
                 external_data.append(_csv_to_xml(csv_content, csv_file.filename or "data.csv"))
 
         xform_xml, warnings, title, form_id = _convert_xlsform(xlsform_path, tmp_dir)
+        xls_rows = _read_xlsx_rows(xlsform_path)
 
         return {
             "xform_xml": xform_xml,
@@ -137,6 +219,37 @@ async def convert(
             "title": title,
             "id": form_id,
             "external_data": external_data,
+            "survey": xls_rows.get("survey", []),
+            "choices": xls_rows.get("choices", []),
+            "settings": xls_rows.get("settings", []),
+        }
+    except pyxform.errors.PyXFormError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except openpyxl.utils.exceptions.InvalidFileException as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid Excel file: {exc}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Internal error: {exc}")
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@app.post("/convert-json")
+async def convert_json(body: ConvertJsonRequest):
+    """Convert edited xlsRows (JSON) back to XForm XML."""
+    tmp_dir = Path(tempfile.mkdtemp())
+    try:
+        xlsx_path = _write_xlsx_from_rows(
+            body.survey, body.choices, body.settings, tmp_dir
+        )
+        xform_xml, warnings, title, form_id = _convert_xlsform(xlsx_path, tmp_dir)
+        return {
+            "xform_xml": xform_xml,
+            "warnings": warnings,
+            "title": title,
+            "id": form_id,
+            "survey": body.survey,
+            "choices": body.choices,
+            "settings": body.settings,
         }
     except pyxform.errors.PyXFormError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -175,42 +288,85 @@ async def health():
     return {"status": "ok", "pyxform_version": pyxform.__version__}
 
 
-
 from fastapi.responses import Response
 
-@app.get("/test-form-raw")
-async def test_form_raw():
-    xlsx_path = "/Users/achmadnaufal/projects/forms/china_stm/Draft_Regag_Garlic_UPDATED.xlsx"
-    with open(xlsx_path, "rb") as f:
-        data = f.read()
-    return Response(content=data, media_type="application/octet-stream", headers={
-        "Content-Disposition": "attachment; filename=Draft_Regag_Garlic_UPDATED.xlsx",
-        "Access-Control-Allow-Origin": "*"
-    })
+
+class ExportRequest(BaseModel):
+    survey: list[dict[str, str]]
+    choices: list[dict[str, str]]
+    settings: list[dict[str, str]]
+    filename: str = "form.xlsx"
 
 
-@app.get("/csv/{filename}")
-async def serve_csv(filename: str):
-    import os
-    csv_dir = "/Users/achmadnaufal/projects/forms/china_stm/pulldata/"
-    filepath = os.path.join(csv_dir, filename)
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="CSV not found")
-    with open(filepath, "rb") as f:
-        data = f.read()
-    return Response(content=data, media_type="text/csv", headers={"Access-Control-Allow-Origin": "*"})
+@app.post("/export")
+async def export_xlsx(body: ExportRequest):
+    """Export survey/choices/settings rows as a downloadable .xlsx file."""
+    tmp_dir = Path(tempfile.mkdtemp())
+    try:
+        xlsx_path = _write_xlsx_from_rows(
+            body.survey, body.choices, body.settings, tmp_dir
+        )
+        xlsx_bytes = xlsx_path.read_bytes()
+        safe_filename = body.filename if body.filename.endswith(".xlsx") else body.filename + ".xlsx"
+        return Response(
+            content=xlsx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{safe_filename}"'},
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Export failed: {exc}")
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+class DeployRequest(BaseModel):
+    survey: list[dict[str, str]]
+    choices: list[dict[str, str]]
+    settings: list[dict[str, str]]
+    kobo_url: str = "https://kf.kobotoolbox.org"
+    api_token: str = ""
+    form_name: str = "New Form"
+
+
+@app.post("/deploy")
+async def deploy_to_kobo(body: DeployRequest):
+    """Deploy form to KoboToolbox via REST API.
+
+    Builds .xlsx, then POSTs to KoboToolbox /api/v2/assets/ endpoint.
+    """
+    if not body.api_token:
+        raise HTTPException(status_code=400, detail="API token is required")
+
+    tmp_dir = Path(tempfile.mkdtemp())
+    try:
+        xlsx_path = _write_xlsx_from_rows(
+            body.survey, body.choices, body.settings, tmp_dir
+        )
+        xlsx_bytes = xlsx_path.read_bytes()
+
+        import requests
+        kobo_base = body.kobo_url.rstrip("/")
+        resp = requests.post(
+            f"{kobo_base}/api/v2/assets/",
+            headers={"Authorization": f"Token {body.api_token}"},
+            data={"name": body.form_name, "asset_type": "survey"},
+            files={"file": (f"{body.form_name}.xlsx", xlsx_bytes,
+                           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            timeout=30,
+        )
+        if resp.status_code >= 400:
+            raise HTTPException(
+                status_code=resp.status_code,
+                detail=f"KoboToolbox API error: {resp.text[:500]}",
+            )
+        return resp.json()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Deploy failed: {exc}")
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
 
 if __name__ == "__main__":
-
     uvicorn.run(app, host="0.0.0.0", port=5050)
-
-
-
-from fastapi.responses import FileResponse, Response
-
-@app.get("/test-form-raw")
-async def test_form_raw():
-    xlsx_path = "/Users/achmadnaufal/projects/forms/china_stm/Draft_Regag_Garlic_UPDATED.xlsx"
-    with open(xlsx_path, "rb") as f:
-        data = f.read()
-    return Response(content=data, media_type="application/octet-stream", headers={"Content-Disposition": "attachment; filename=Draft_Regag_Garlic_UPDATED.xlsx", "Access-Control-Allow-Origin": "*"})

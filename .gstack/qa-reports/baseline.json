@@ -1,0 +1,21 @@
+{
+  "date": "2026-03-15",
+  "run": "d",
+  "url": "http://localhost:5173",
+  "healthScore": 93,
+  "issues": [
+    { "id": "ISSUE-001", "title": "Heading hierarchy skips H2", "severity": "MEDIUM", "category": "Accessibility" },
+    { "id": "ISSUE-002", "title": "FORMULA column truncated for long expressions", "severity": "LOW", "category": "UX" },
+    { "id": "ISSUE-003", "title": "Values update requires blur + 2s polling delay", "severity": "LOW", "category": "UX" }
+  ],
+  "categoryScores": {
+    "console": 100,
+    "links": 100,
+    "visual": 100,
+    "functional": 100,
+    "ux": 92,
+    "performance": 100,
+    "content": 100,
+    "accessibility": 81
+  }
+}
