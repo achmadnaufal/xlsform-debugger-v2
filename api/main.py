@@ -2,9 +2,11 @@
 
 import csv
 import io
+import logging
 import os
 import shutil
 import tempfile
+import traceback
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
@@ -18,6 +20,8 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+logger = logging.getLogger("xlsform_debugger")
 
 app = FastAPI(title="XLSForm Debugger v2 API")
 
@@ -106,6 +110,22 @@ def _convert_xlsform(
     return xform_xml, list(warnings), title, form_id
 
 
+def _decode_csv_bytes(raw: bytes) -> str:
+    """Decode CSV bytes, tolerating non-UTF-8 files (e.g. Excel-exported CSV).
+
+    Tries UTF-8 (with BOM) first, then common single-byte encodings. Latin-1 is
+    the final fallback because it maps every byte to a code point and never
+    raises, so decoding always succeeds rather than crashing the request.
+    """
+    for encoding in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    # Unreachable in practice (latin-1 never raises); kept as a safety net.
+    return raw.decode("utf-8", errors="replace")
+
+
 def _csv_to_xml(csv_content: str, filename: str) -> dict[str, str]:
     """Convert CSV content to enketo external data XML format.
     
@@ -167,7 +187,7 @@ async def convert(
             for csv_file in csv_files:
                 _save_upload(csv_file, tmp_dir)
                 csv_file.file.seek(0)
-                csv_content = csv_file.file.read().decode("utf-8")
+                csv_content = _decode_csv_bytes(csv_file.file.read())
                 external_data.append(_csv_to_xml(csv_content, csv_file.filename or "data.csv"))
 
         xform_xml, warnings, title, form_id = _convert_xlsform(xlsform_path, tmp_dir)
@@ -184,7 +204,8 @@ async def convert(
     except pyxform.errors.PyXFormError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail="An internal error occurred")
+        logger.error("convert failed: %s\n%s", exc, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -208,7 +229,8 @@ async def validate(
     except pyxform.errors.PyXFormError as exc:
         return {"valid": False, "errors": [str(exc)], "warnings": []}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail="An internal error occurred")
+        logger.error("validate failed: %s\n%s", exc, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
