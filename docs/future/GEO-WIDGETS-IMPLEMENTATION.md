@@ -1,3 +1,7 @@
+> **Status: Planned — not yet implemented.**
+> This document describes the target architecture for geopoint/geoshape/geotrace rendering. None of the components described here exist in `app/src/components/` yet.
+> See [`PLANNING.md`](../../PLANNING.md) for the current step-by-step plan.
+
 # Geoshape & Geopoint Map Rendering Implementation
 
 ## Overview

@@ -1,3 +1,7 @@
+> **Status: Planned — not yet implemented.**
+> Steps below describe a target state. The code referenced (custom map components, CSS imports in `main.tsx`, OSM tile config) is **not currently present** in the repo.
+> Use [`PLANNING.md`](../../PLANNING.md) for the canonical implementation plan.
+
 # Geoshape/Geopoint Quick Start Guide
 
 ## TL;DR - Get Started in 5 Minutes

@@ -1,3 +1,7 @@
+> **Status: Planned — not yet implemented.**
+> The "✅ Completed" markers in this checklist reflect the intended design, not the current repo state.
+> Treat this file as a historical design note; `PLANNING.md` is the source of truth for what will actually be built.
+
 # Geoshape/Geopoint Implementation Checklist
 
 ## ✅ Completed Tasks

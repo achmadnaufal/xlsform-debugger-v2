@@ -1,3 +1,6 @@
+> **Reference document — not project documentation.**
+> This is a detailed analysis of a specific production XLSForm (STM RegAg China Garlic v0.7), kept here as an example of the kind of form the debugger is designed to work with. It is not a spec or roadmap for this project.
+
 # Form Analysis Report: STM RegAg China Garlic
 
 ## 1. Form Overview

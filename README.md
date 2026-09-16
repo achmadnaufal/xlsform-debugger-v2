@@ -169,7 +169,7 @@ See [PLANNING.md](PLANNING.md) for full details.
 | ~~XLSX export~~ | **Done** — download edited form as `.xlsx` |
 | ~~Scrollable sheet tabs~~ | **Done** — sheet tabs scroll with arrows when >6 sheets |
 | Preserve Excel formatting in export | Next — maintain colors, column widths, etc. from the uploaded file |
-| **Geoshape / map rendering** | Planned — next milestone. Currently shows a blank map; fix requires swapping Google Maps tiles for OpenStreetMap (no API key needed). See [PLANNING.md](PLANNING.md). |
+| **Geoshape / map rendering** | Ready to build — step-by-step plan in [PLANNING.md](PLANNING.md). Currently blank: the Google Maps tile layer is stubbed out because it requires an API key. Fix swaps in OpenStreetMap tiles (no key). Earlier design notes are archived under [`docs/future/`](docs/future/). |
 | Multi-language switcher | Backlog |
 | CSV data editor (inline) | Backlog |
 | Form submission XML export | Backlog |
@@ -194,3 +194,22 @@ See [PLANNING.md](PLANNING.md) for full details.
 - The renderer is **unmodified enketo-core** — no custom patches. If it works here, it works in Kobo.
 - `jr://` image URLs in form hints will show a broken image warning — expected, doesn't affect form logic.
 - GPS/geoshape fields render but map tiles are currently blank (see planned improvements above).
+
+---
+
+## Repo layout
+
+```
+api/                   FastAPI backend (pyxform + openpyxl)
+  main.py              Endpoints: /convert /validate /export /health
+  README.md            API reference
+app/                   React 19 + Vite frontend (enketo-core renderer)
+  src/                 Components, hooks, contexts, utils
+docs/                  Screenshots + sample form/CSV
+  future/              Design notes for features not yet implemented
+  reference/           Example form analyses for context
+PLANNING.md            Active roadmap
+README.md              You are here
+start.sh               Unified launcher (API + frontend)
+autotest.js            Local dev-only smoke script (see file header)
+```

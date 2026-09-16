@@ -1,3 +1,8 @@
+> **Status: Planned — not yet implemented.**
+> This document describes the intended integration design for geoshape/geopoint/geotrace widgets.
+> The implementation has **not** been wired up in the current codebase; geo fields still render as blank maps.
+> See [`PLANNING.md`](../../PLANNING.md) for the active implementation plan and [`README.md`](../../README.md) for current status.
+
 # enketo-core Geoshape/Geopoint Integration Guide
 
 ## Overview

@@ -1,5 +1,10 @@
 # Development Planning
 
+> Companion to [`README.md`](README.md). This file is the active roadmap —
+> what's next, why, and exactly which files change. For feature status at a
+> glance see the "Planned improvements" table in the README. Archived design
+> notes live under [`docs/future/`](docs/future/).
+
 ## Next: Geoshape / Map Rendering
 
 ### Problem

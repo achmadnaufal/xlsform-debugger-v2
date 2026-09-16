@@ -1,3 +1,21 @@
+/**
+ * Local dev-only smoke script (not part of the shipped app).
+ *
+ * Drives a running XLSForm Debugger v2 instance with Puppeteer: uploads the
+ * sample form + pulldata CSVs, walks through every question, and logs issues.
+ * Paths below are hard-coded to the author's local forms directory — edit
+ * FORM_URL / XLSFORM_PATH / CSV_DIR before running elsewhere.
+ *
+ * Usage:
+ *   # 1. Start the app
+ *   ./start.sh
+ *   # 2. In another shell
+ *   node autotest.js
+ *
+ * Requires: `npm i puppeteer` in the current directory (not pulled in by
+ * app/package.json — this script is intentionally outside the app's dep graph).
+ */
+
 const puppeteer = require("puppeteer");
 const path = require("path");
 const fs = require("fs");
