@@ -8,7 +8,7 @@ export default defineConfig(({ mode: _mode }) => ({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
-    allowedHosts: ["tools.achmadnaufal.com"],
+    allowedHosts: ["tools.dapur.dev"],
     proxy: {
       "/xlsform/convert": {
         target: "http://localhost:5050",
